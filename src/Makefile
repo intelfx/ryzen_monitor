@@ -1,5 +1,5 @@
 CC ?= gcc
-CFLAGS ?= -O3 -mtune=native -march=native
+CFLAGS ?= -O3 -mtune=native -march=native -DNDEBUG
 
 LIBSMU_DIR ?= lib
 
@@ -13,6 +13,7 @@ SRC = \
       smu_common.c \
       pm_tables.c \
       readinfo.c \
+      box_drawing_ops.c \
       # EOL
 OBJ = $(SRC:.c=.o)
 
