@@ -14,6 +14,7 @@ SRC = \
       pm_tables.c \
       readinfo.c \
       box_drawing_ops.c \
+      json_ops.c \
       # EOL
 OBJ = $(SRC:.c=.o)
 
