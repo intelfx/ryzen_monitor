@@ -1,22 +1,22 @@
-CC = gcc
+CC ?= gcc
+CFLAGS ?= -O3 -mtune=native -march=native
 
-CFLAGS = -O3 -mtune=native -march=native
 override CFLAGS += -Ilib
-override LDFLAGS += -lm
+LDLIBS = -lm
 
 OUT = ryzen_monitor
-
-SRC = ryzen_monitor.c
-SRC += pm_tables.c
-SRC += readinfo.c
-SRC += lib/libsmu.c
-
+SRC = \
+      ryzen_monitor.c \
+      lib/libsmu.c \
+      pm_tables.c \
+      readinfo.c \
+      # EOL
 OBJ = $(SRC:.c=.o)
 
 all: $(OUT)
 
 $(OUT): $(OBJ)
-	$(CC) $(CFLAGS) $(LDFLAGS) -o $(OUT) $(OBJ)
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
 clean:
 	rm -rf *.o lib/*.o
