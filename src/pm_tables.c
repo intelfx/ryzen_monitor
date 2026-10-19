@@ -40,6 +40,7 @@ static const struct {
     { 0x370003, pm_table_0x370003 }, //Lucienne, Renoir
     { 0x370005, pm_table_0x370005 }, //Lucienne, Renoir
     { 0x1E0004, pm_table_0x1E0004 }, //Picasso
+    { 0x100100, pm_table_0x100100 }, //Pinnacle Ridge, which has no version
     { 0x540004, pm_table_0x540004 }, //Raphael, 2 CCDs
     { 0x540104, pm_table_0x540104 }, //Raphael, 1 CCD
     { 0x620205, pm_table_0x620205 }, //Granite Ridge, 2 CCDs
