@@ -89,12 +89,23 @@ static void print_sysinfo(const struct sample *s) {
     print_line("MP1 IF Version", "v%d", sysinfo->if_ver);
 }
 
+// Format a per-core value, or a dash if the table does not have it.
+static const char *core_cell(char *buf, size_t len, const char *format, int width,
+        const struct sample *s, enum metric_id id, int i, float scale) {
+    if (metric_present(s, id, i))
+        snprintf(buf, len, format, width, metric_value(s, id, i) * scale);
+    else
+        snprintf(buf, len, "%*s", width, "-");
+    return buf;
+}
+
 static void print_cores(const struct sample *s) {
     for (int i = 0; i < s->ncores; i++) {
         const struct core_state *core = &s->core[i];
         char number_str[16];
         char frequency_str_buf[10];
         const char* frequency_str = frequency_str_buf;
+        char power[16], voltage[16], temp[16], c0[16], c1[16], c6[16];
 
         if (core->number < 0)
             continue;
@@ -107,14 +118,14 @@ static void print_cores(const struct sample *s) {
         else
             snprintf(frequency_str_buf, sizeof(frequency_str_buf), "%4.f MHz", metric_value(s, M_CORE_FREQUENCY, i));
 
-        fprintf(stdout, "│ %7s │ %10s | %6.3f W | %5.3f V | %6.2f C | C0: %5.1f %% | C1: %5.1f %% | C6: %5.1f %% │\n",
+        fprintf(stdout, "│ %7s │ %10s | %s W | %s V | %s C | C0: %s %% | C1: %s %% | C6: %s %% │\n",
                 number_str, frequency_str,
-                metric_value(s, M_CORE_POWER, i),
-                metric_value(s, M_CORE_VOLTAGE, i),
-                metric_value(s, M_CORE_TEMPERATURE, i),
-                metric_value(s, M_CORE_C0, i) * 100.f,
-                metric_value(s, M_CORE_CC1, i) * 100.f,
-                metric_value(s, M_CORE_CC6, i) * 100.f);
+                core_cell(power, sizeof(power), "%*.3f", 6, s, M_CORE_POWER, i, 1.f),
+                core_cell(voltage, sizeof(voltage), "%*.3f", 5, s, M_CORE_VOLTAGE, i, 1.f),
+                core_cell(temp, sizeof(temp), "%*.2f", 6, s, M_CORE_TEMPERATURE, i, 1.f),
+                core_cell(c0, sizeof(c0), "%*.1f", 5, s, M_CORE_C0, i, 100.f),
+                core_cell(c1, sizeof(c1), "%*.1f", 5, s, M_CORE_CC1, i, 100.f),
+                core_cell(c6, sizeof(c6), "%*.1f", 5, s, M_CORE_CC6, i, 100.f));
     }
 }
 
