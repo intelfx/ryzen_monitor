@@ -374,6 +374,8 @@ void pm_table_0x380805(pm_table *pmt, void* base_addr); //5900X: Zen3, 16 cores,
 void pm_table_0x400005(pm_table *pmt, void* base_addr); //5700G: Zen3,  8 cores, GPU, version 5
 void pm_table_0x240903(pm_table *pmt, void* base_addr); //3700X: Zen2,  8 cores, version 3
 void pm_table_0x240803(pm_table *pmt, void* base_addr); //3950X: Zen2, 16 cores, version 3
+void pm_table_0x370003(pm_table *pmt, void* base_addr); //Zen2, 8 cores, GPU, version 3; Lucienne, Renoir
+void pm_table_0x370005(pm_table *pmt, void* base_addr); //Zen2, 8 cores, GPU, version 5; Lucienne, Renoir
 
 // Map pm_buf as PM Table version into pmt. Returns 0 if the version is unknown.
 int select_pm_table_version(unsigned int version, pm_table *pmt, unsigned char *pm_buf);
