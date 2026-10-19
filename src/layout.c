@@ -127,6 +127,18 @@ static const struct row power_reports_rows[] = {
     DVALUE("Package Power (SMU)", M_SMU_PACKAGE_POWER),
 };
 
+// A few headline numbers, e.g. for a status bar.
+static const struct row summary_rows[] = {
+    VALUE("Peak Core Temperature", M_PEAK_CORE_TEMPERATURE),
+    VALUE("Peak Core Voltage", M_PEAK_CORE_VOLTAGE),
+    VALUE("Peak Core Frequency", M_PEAK_CORE_FREQUENCY),
+    VALUE("Average Core Temperature", M_AVERAGE_CORE_TEMPERATURE),
+    VALUE("Average Core Voltage", M_AVERAGE_CORE_VOLTAGE),
+    VALUE("Average Core Frequency", M_AVERAGE_CORE_FREQUENCY),
+    VALUE("Total Core Power", M_TOTAL_CORE_POWER),
+    VALUE("CPU Utilization", M_AVERAGE_CORE_C0),
+};
+
 #define ROWS(r) r, ARRAY_SIZE(r)
 
 const struct group_def group_defs[GROUP_COUNT] = {
@@ -139,6 +151,7 @@ const struct group_def group_defs[GROUP_COUNT] = {
     [GROUP_GRAPHICS]        = { "graphics", ROWS(graphics_rows) },
     [GROUP_POWER]           = { "power", ROWS(power_rows) },
     [GROUP_POWER_REPORTS]   = { "power_reports", ROWS(power_reports_rows) },
+    [GROUP_SUMMARY]         = { "summary", ROWS(summary_rows) },
 };
 
 #define GROUP(g) (1u << (g))
@@ -151,6 +164,7 @@ const struct view_def view_defs[VIEW_COUNT] = {
     [VIEW_MEMORY]     = { "memory", 'm', GROUP(GROUP_MEMORY) },
     [VIEW_GFX]        = { "gfx", 'g', GROUP(GROUP_GRAPHICS) },
     [VIEW_POWER]      = { "power", 'p', GROUP(GROUP_POWER) | GROUP(GROUP_POWER_REPORTS) },
+    [VIEW_SUMMARY]    = { "summary", 'y', GROUP(GROUP_SUMMARY) },
 };
 
 bool parse_views(const char *list, unsigned int *views) {

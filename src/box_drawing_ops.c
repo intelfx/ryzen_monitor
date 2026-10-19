@@ -56,6 +56,7 @@ static const char* const group_begin_strings[] = {
     [GROUP_GRAPHICS] = "╭── Graphics Subsystem──────────────────────────┬────────────────────────────────────────────────╮\n",
     [GROUP_POWER] = "╭── Power Consumption ──────────────────────────┬────────────────────────────────────────────────╮\n",
     [GROUP_POWER_REPORTS] = "├── Additional Reports ─────────────────────────┼────────────────────────────────────────────────┤\n",
+    [GROUP_SUMMARY] = "╭── Summary ────────────────────────────────────┬────────────────────────────────────────────────╮\n",
 };
 
 static const char usual_end_string[] = "╰───────────────────────────────────────────────┴────────────────────────────────────────────────╯\n";
@@ -69,6 +70,7 @@ static const char* const group_end_strings[] = {
     [GROUP_GRAPHICS] = usual_end_string,
     [GROUP_POWER] = "",
     [GROUP_POWER_REPORTS] = usual_end_string,
+    [GROUP_SUMMARY] = usual_end_string,
 };
 
 static void print_sysinfo(const struct sample *s) {

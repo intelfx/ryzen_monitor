@@ -41,6 +41,7 @@ enum group {
     GROUP_GRAPHICS,
     GROUP_POWER,
     GROUP_POWER_REPORTS,
+    GROUP_SUMMARY,
     GROUP_COUNT,
 };
 
@@ -80,6 +81,7 @@ enum view {
     VIEW_MEMORY,
     VIEW_GFX,
     VIEW_POWER,
+    VIEW_SUMMARY,
     VIEW_COUNT,
 };
 
@@ -92,6 +94,7 @@ struct view_def {
 extern const struct view_def view_defs[VIEW_COUNT];
 
 #define VIEWS_ALL ((1u << VIEW_COUNT) - 1)
+#define VIEWS_DEFAULT (VIEWS_ALL & ~(1u << VIEW_SUMMARY))
 
 // What the user asked to see.
 struct display {

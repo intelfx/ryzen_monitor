@@ -43,6 +43,9 @@ const struct metric_def metric_defs[M_COUNT] = {
     [M_AVERAGE_CORE_VOLTAGE]      = G("average_core_voltage", "Average estimated core voltage", UNIT_VOLTS),
     [M_AVERAGE_CORE_CC6]          = G("average_core_cc6", "Average core CC6 residency", UNIT_RATIO),
     [M_TOTAL_CORE_POWER]          = G("total_core_power", "Sum of core power", UNIT_WATTS),
+    [M_AVERAGE_CORE_TEMPERATURE]  = G("average_core_temperature", "Average core temperature", UNIT_CELSIUS),
+    [M_AVERAGE_CORE_FREQUENCY]    = G("average_core_frequency", "Average effective core frequency", UNIT_MEGAHERTZ),
+    [M_AVERAGE_CORE_C0]           = G("average_core_c0", "Average core C0 residency (CPU utilization)", UNIT_RATIO),
     [M_PACKAGE_CC6]               = G("package_cc6", "Package CC6 residency", UNIT_RATIO),
 
     [M_PEAK_TEMPERATURE]          = G("peak_temperature", "Peak temperature", UNIT_CELSIUS),
@@ -137,6 +140,7 @@ void compute_sample(const pm_table *pmt, const system_info *sysinfo,
     float package_sleep_time, average_voltage;
     float peak_core_frequency, peak_core_temp, peak_core_voltage;
     float total_core_voltage, total_core_power, total_usage, total_core_CC6;
+    float total_core_temp, total_core_frequency;
     float l3_logic_power, l3_vddm_power, edc_value;
     int i, core_number;
 
@@ -159,6 +163,7 @@ void compute_sample(const pm_table *pmt, const system_info *sysinfo,
 
     peak_core_frequency = peak_core_temp = peak_core_voltage = 0;
     total_core_voltage = total_core_power = total_usage = total_core_CC6 = 0;
+    total_core_temp = total_core_frequency = 0;
     core_number = 0;
 
     if (pmt->PC6) {
@@ -212,6 +217,8 @@ void compute_sample(const pm_table *pmt, const system_info *sysinfo,
             total_core_power += pmta(CORE_POWER[i]);
             total_usage += pmta(CORE_C0[i]);
             total_core_CC6 += pmta(CORE_CC6[i]);
+            total_core_temp += pmta(CORE_TEMP[i]);
+            total_core_frequency += core_frequency;
         }
     }
 
@@ -221,6 +228,9 @@ void compute_sample(const pm_table *pmt, const system_info *sysinfo,
     set(s, M_AVERAGE_CORE_VOLTAGE, 0, total_core_voltage / sysinfo->enabled_cores_count);
     set(s, M_AVERAGE_CORE_CC6, 0, (total_core_CC6 / sysinfo->enabled_cores_count) / 100.f);
     set(s, M_TOTAL_CORE_POWER, 0, total_core_power);
+    set(s, M_AVERAGE_CORE_TEMPERATURE, 0, total_core_temp / sysinfo->enabled_cores_count);
+    set(s, M_AVERAGE_CORE_FREQUENCY, 0, total_core_frequency / sysinfo->enabled_cores_count);
+    set(s, M_AVERAGE_CORE_C0, 0, (total_usage / sysinfo->enabled_cores_count) / 100.f);
     if (pmt->PC6) set(s, M_PACKAGE_CC6, 0, pmta(PC6) / 100.f);
 
     // Electrical and thermal constraints

@@ -49,7 +49,7 @@
 smu_obj_t obj;
 static struct timespec update_time_s = {1, 0};
 static int show_disabled_cores = 0;
-static struct display display = { .views = VIEWS_ALL };
+static struct display display = { .views = VIEWS_DEFAULT };
 
 //Helper to access the PM Table elements. If an element doesn't exist in the
 //current PM Table version, it's pointer is set to 0. This helper returns
@@ -368,11 +368,11 @@ void show_help(char* program) {
             "\t-t, --dumpfile=<filename> - Test mode. Read PM Table from raw-dumfile. Use in conjunction with -f\n"
             "\t-o, --format=<format>     - Output format (boxdrawing, json, ndjson)\n"
             "\t-1, --once                - Print once and exit\n"
-            "\t    --view=<view>[,...]   - Show only these views (info, cores, stats, electrical, memory, gfx, power, all)\n"
+            "\t    --view=<view>[,...]   - Show only these views (info, cores, stats, electrical, memory, gfx, power, summary, all)\n"
             "\t-c, --compact             - Leave out details.\n"
             "\n"
         "Keys in the interactive monitor:\n"
-            "\tq - quit, c - compact mode, i/k/s/e/m/g/p - info/cores/stats/electrical/memory/gfx/power view\n",
+            "\tq - quit, c - compact mode, i/k/s/e/m/g/p/y - info/cores/stats/electrical/memory/gfx/power/summary view\n",
         program
     );
 }
