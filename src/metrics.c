@@ -254,7 +254,18 @@ void compute_sample(const pm_table *pmt, const system_info *sysinfo,
     }
 
     LIMIT(M_EDC_SOC, EDC_VALUE_SOC, EDC_LIMIT_SOC);
-    LIMIT(M_THM, THM_VALUE, THM_LIMIT);
+    if (pmt->THM_VALUE) {
+        set_limit(s, M_THM, *pmt->THM_VALUE, pmta(THM_LIMIT));
+    } else {
+        // Some tables only have a value per core; the hottest one is held to the limit.
+        float thm_value = -INFINITY;
+
+        for (i = 0; i < pmt->max_cores; i++)
+            if (pmt->THM_VALUE_CORES[i] && *pmt->THM_VALUE_CORES[i] > thm_value)
+                thm_value = *pmt->THM_VALUE_CORES[i];
+        if (thm_value > -INFINITY)
+            set_limit(s, M_THM, thm_value, pmta(THM_LIMIT));
+    }
     LIMIT(M_THM_SOC, THM_VALUE_SOC, THM_LIMIT_SOC);
     LIMIT(M_THM_GFX, THM_VALUE_GFX, THM_LIMIT_GFX);
     // STT_VALUE_APU / STT_LIMIT_APU always zero
