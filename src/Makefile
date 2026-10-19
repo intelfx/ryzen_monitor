@@ -13,6 +13,8 @@ SRC = \
       smu_common.c \
       pm_tables.c \
       readinfo.c \
+      metrics.c \
+      layout.c \
       box_drawing_ops.c \
       json_ops.c \
       # EOL

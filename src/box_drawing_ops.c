@@ -34,25 +34,16 @@ static void print_line(const char* label, const char* value_format, ...) {
     fprintf(stdout, "│ %45s │ %46s │\n", label, buffer);
 }
 
-static _Bool use_control_codes = 0;
-static void box_drawing_init(_Bool repeating, _Bool interactive) {
+static bool use_control_codes = 0;
+static void box_drawing_init(bool repeating, bool interactive) {
     use_control_codes = repeating && interactive;
     if (use_control_codes)
         fprintf(stdout, "\e[?25l"); // Hide Cursor
 }
 
-static void box_drawing_cleanup() {
+static void box_drawing_cleanup(void) {
     if (use_control_codes)
         fprintf(stdout, "\e[?25h"); // Show Cursor
-}
-
-static void box_drawing_begin() {
-    if (use_control_codes)
-        fprintf(stdout, "\e[1;1H\e[2J"); //Move cursor to (1,1); Clear entire screen
-}
-
-static void box_drawing_end() {
-    fflush(stdout);
 }
 
 static const char* const group_begin_strings[] = {
@@ -80,162 +71,90 @@ static const char* const group_end_strings[] = {
     [GROUP_POWER_REPORTS] = usual_end_string,
 };
 
-static void box_drawing_begin_group(enum group group) {
-    fprintf(stdout, "%s", group_begin_strings[group]);
+static void print_sysinfo(const struct sample *s) {
+    const system_info *sysinfo = s->sysinfo;
+
+    print_line("CPU Model", "%s", sysinfo->cpu_name);
+    print_line("Processor Code Name", "%s", sysinfo->codename);
+    print_line("Cores", "%d", sysinfo->cores);
+    print_line("Core CCDs", "%d", sysinfo->ccds);
+    if (s->zen_version < 3) {
+        print_line("Core CCXs", "%d", sysinfo->ccxs);
+        print_line("Cores Per CCX", "%d", sysinfo->cores_per_ccx);
+    } else
+        print_line("Cores Per CCD", "%d", sysinfo->cores_per_ccx); //Zen3 does not have CCXs anymore
+    print_line("SMU FW Version", "v%s", sysinfo->smu_fw_ver);
+    print_line("MP1 IF Version", "v%d", sysinfo->if_ver);
 }
 
-static void box_drawing_end_group(enum group group) {
-    fprintf(stdout, "%s", group_end_strings[group]);
+static void print_cores(const struct sample *s) {
+    for (int i = 0; i < s->ncores; i++) {
+        const struct core_state *core = &s->core[i];
+        char number_str[8];
+        char frequency_str_buf[10];
+        const char* frequency_str = frequency_str_buf;
+
+        if (core->number < 0)
+            continue;
+
+        snprintf(number_str, sizeof(number_str), "Core %d", core->number);
+        if (core->disabled)
+            frequency_str = "Disabled";
+        else if (core->sleeping)
+            frequency_str = "Sleeping";
+        else
+            snprintf(frequency_str_buf, sizeof(frequency_str_buf), "%4.f MHz", metric_value(s, M_CORE_FREQUENCY, i));
+
+        fprintf(stdout, "│ %7s │ %10s | %6.3f W | %5.3f V | %6.2f C | C0: %5.1f %% | C1: %5.1f %% | C6: %5.1f %% │\n",
+                number_str, frequency_str,
+                metric_value(s, M_CORE_POWER, i),
+                metric_value(s, M_CORE_VOLTAGE, i),
+                metric_value(s, M_CORE_TEMPERATURE, i),
+                metric_value(s, M_CORE_C0, i) * 100.f,
+                metric_value(s, M_CORE_CC1, i) * 100.f,
+                metric_value(s, M_CORE_CC6, i) * 100.f);
+    }
 }
 
-static const char* const datum_strings[] = {
-    [DATUM_MODEL] = "CPU Model",
-    [DATUM_CODENAME] = "Processor Code Name",
-    [DATUM_CORES] = "Cores",
-    [DATUM_CCDS] = "Core CCDs",
-    [DATUM_CCXS] = "Core CCXs",
-    [DATUM_CORES_PER_CCX] = "Cores Per CCX",
-    [DATUM_CORES_PER_CCD] = "Cores Per CCD",
-    [DATUM_SMU_FW_VERSION] = "SMU FW Version",
-    [DATUM_MP1_IF_VERSION] = "MP1 IF Version",
-
-    [DATUM_PEAK_CORE_FREQ] = "Highest Effective Core Frequency",
-    [DATUM_PEAK_CORE_TEMP] = "Highest Core Temperature",
-    [DATUM_PEAK_CORE_VOLTAGE] = "Highest Core Voltage",
-    [DATUM_AVG_CORE_VOLTAGE] = "Average Core Voltage",
-    [DATUM_AVG_CORE_C6] = "Average Core CC6",
-    [DATUM_TOTAL_CORE_POWER] = "Total Core Power Sum",
-
-    [DATUM_PEAK_CORE_VOLTAGE_SMU] = "Peak Core Voltage",
-    [DATUM_PACKAGE_C6_SMU] = "Package CC6",
-
-    [DATUM_PEAK_TEMP] = "Peak Temperature",
-    [DATUM_SOC_TEMP] = "SoC Temperature",
-    [DATUM_GFX_TEMP] = "GFX Temperature",
-    [DATUM_CORE_VRM_VOLTAGE_LIMIT] = "Voltage from Core VRM",
-    [DATUM_PPT_LIMIT] = "PPT",
-    [DATUM_PPT_APU_LIMIT] = "PPT APU",
-    [DATUM_TDC_LIMIT_NOMINAL] = "TDC Value",
-    [DATUM_TDC_LIMIT_ACTUAL] = "TDC Actual",
-    [DATUM_TDC_SOC_LIMIT_NOMINAL] = "TDC Value, SoC only",
-    [DATUM_EDC_LIMIT] = "EDC",
-    [DATUM_EDC_SOC_LIMIT] = "EDC, SoC only",
-    [DATUM_THM_LIMIT] = "THM",
-    [DATUM_THM_SOC_LIMIT] = "THM SoC",
-    [DATUM_THM_GFX_LIMIT] = "THM GFX",
-    [DATUM_FIT_LIMIT] = "FIT",
-
-    [DATUM_MEMORY_COUPLED] = "Coupled Mode",
-    [DATUM_FCLK_AVG] = "Fabric Clock (Average)",
-    [DATUM_FCLK] = "Fabric Clock",
-    [DATUM_UCLK] = "Uncore Clock",
-    [DATUM_MCLK] = "Memory Clock",
-    [DATUM_VDDM] = "cLDO_VDDM",
-    [DATUM_VDDP] = "cLDO_VDDP",
-    [DATUM_VDDG] = "cLDO_VDDG",
-    [DATUM_VDDG_IOD] = "cLDO_VDDG_IOD",
-    [DATUM_VDDG_CCD] = "cLDO_VDDG_CCD",
-
-    [DATUM_GFX_VOLTAGE_ROC_POWER] = "GFX Voltage | ROC Power",
-    [DATUM_GFX_FREQ_REAL_EFF] = "GFX Clock Real | Effective",
-    [DATUM_GFX_BUSY] = "GFX Busy",
-    [DATUM_GFX_EDC_LIMIT_RESIDENCY] = "GFX EDC Limit | Residency",
-    [DATUM_GFX_DISPLAY_COUNT_FPS] = "Display Count | FPS",
-    [DATUM_GFX_DGPU_POWER_FREQ_TARGET_BUSY] = "DGPU Power | Freq Target | Busy",
-
-    [DATUM_VDDR_SOC_POWER] = "VDDCR_SOC Power",
-    [DATUM_IO_VDDR_SOC_POWER] = "IO VDDCR_SOC Power",
-    [DATUM_GMI2_VDDG_POWER] = "GMI2_VDDG Power",
-    [DATUM_ROC_POWER] = "ROC Power",
-    [DATUM_L3_LOGIC_POWER] = "L3 Logic Power",
-    [DATUM_L3_VDDM_POWER] = "L3 VDDM Power",
-    [DATUM_VDDIO_MEM_POWER] = "VDDIO_MEM Power",
-    [DATUM_IOD_VDDIO_MEM_POWER] = "IOD_VDDIO_MEM Power",
-    [DATUM_DDR_VDDP_POWER] = "DDR_VDDP Power",
-    [DATUM_DDR_PHY_POWER] = "DDR Phy Power",
-    [DATUM_VDD18_POWER] = "VDD18 Power",
-    [DATUM_IO_DISPLAY_POWER] = "CPU Display IO Power",
-    [DATUM_IO_USB_POWER] = "CPU USB IO Power",
-    [DATUM_CALC_TOTAL_POWER] = "Calculated Thermal Output",
-
-    [DATUM_SVI2_SOC_POWER] = "SoC Power (SVI2)",
-    [DATUM_SVI2_CORE_POWER] = "Core Power (SVI2)",
-    [DATUM_SMU_CORE_POWER] = "Core Power (SMU)",
-    [DATUM_SMU_SOCKET_POWER] = "Socket Power (SMU)",
-    [DATUM_SMU_PACKAGE_POWER] = "Package Power (SMU)",
-};
-
-static enum datum const blank_line_before[] = {
-    DATUM_VDDIO_MEM_POWER,
-    DATUM_CALC_TOTAL_POWER,
-};
-static void maybe_print_blank_line(enum datum datum) {
-    for (int i = 0; i < sizeof(blank_line_before) / sizeof(blank_line_before[0]); ++i)
-        if (blank_line_before[i] == datum)
-            print_line("", "");
-}
-
-static void box_drawing_datum_string(enum datum datum, const char* value) {
-    print_line(datum_strings[datum], "%s", value);
-}
-
-static void box_drawing_datum_bool(enum datum datum, _Bool value) {
-    box_drawing_datum_string(datum, value ? "ON" : "OFF");
-}
-
-static void box_drawing_datum_int(enum datum datum, int value, enum unit unit) {
-    assert(unit == UNIT_COUNT);
-    print_line(datum_strings[datum], "%d", value);
-}
-
-static void box_drawing_datum_float(enum datum datum, float value, enum unit unit) {
-    maybe_print_blank_line(datum);
-    const char* label = datum_strings[datum];
+static void print_value(const char *label, enum metric_kind kind, float value, enum unit unit) {
     const char* format = "";
+    if (kind == KIND_BOOL) {
+        print_line(label, "%s", value ? "ON" : "OFF");
+        return;
+    }
     switch (unit) {
-        case UNIT_COUNT: assert(0 && "datum_float count"); break;
+        case UNIT_COUNT: format = "%.f"; break;
         case UNIT_RATIO: format = "%6.2f %%"; value *= 100.f; break;
         case UNIT_MEGAHERTZ: format = "%8.0f MHz"; break;
         case UNIT_VOLTS: format = "%7.4f V"; break;
-        case UNIT_AMPS: assert(0 && "datum_float amps"); break;
+        case UNIT_AMPS: assert(0 && "value amps"); break;
         case UNIT_WATTS: format = "%7.3f W"; break;
         case UNIT_CELSIUS: format = "%8.2f C"; break;
     }
     print_line(label, format, value);
 }
 
-static void box_drawing_datum_float2(enum datum datum, float value1, enum unit unit1, float value2, enum unit unit2) {
-    const char* label = datum_strings[datum];
+static void print_multi(const char *label, int n, const float *value, const enum unit *unit) {
     const char* format = "";
-    if (unit1 == UNIT_VOLTS && unit2 == UNIT_WATTS) format = "%7.4f V | %8.3f W";
-    else if (unit1 == UNIT_MEGAHERTZ && unit2 == UNIT_MEGAHERTZ) format = "%5.f MHz | %6.f MHz";
-    else if (unit1 == UNIT_AMPS && unit2 == UNIT_RATIO) format = "%7.3f A | %8.2f %%";
-    else if (unit1 == UNIT_COUNT && unit2 == UNIT_COUNT) format = "%2.f | %8.2f  ";
-    else {assert(0 && "datum_float2 unhandled unit pair");}
-    if (unit1 == UNIT_RATIO) value1 *= 100.f;
-    if (unit2 == UNIT_RATIO) value2 *= 100.f;
-    print_line(label, format, value1, value2);
+    float v[3] = { value[0], value[1], n > 2 ? value[2] : 0 };
+    if (n == 2 && unit[0] == UNIT_VOLTS && unit[1] == UNIT_WATTS) format = "%7.4f V | %8.3f W";
+    else if (n == 2 && unit[0] == UNIT_MEGAHERTZ && unit[1] == UNIT_MEGAHERTZ) format = "%5.f MHz | %6.f MHz";
+    else if (n == 2 && unit[0] == UNIT_AMPS && unit[1] == UNIT_RATIO) format = "%7.3f A | %8.2f %%";
+    else if (n == 2 && unit[0] == UNIT_COUNT && unit[1] == UNIT_COUNT) format = "%2.f | %8.2f  ";
+    else if (n == 3 && unit[0] == UNIT_VOLTS && unit[1] == UNIT_AMPS && unit[2] == UNIT_WATTS) format = "%8.3f V | %7.3f A | %8.3f W";
+    else if (n == 3 && unit[0] == UNIT_WATTS && unit[1] == UNIT_MEGAHERTZ && unit[2] == UNIT_RATIO) format = "%7.3f W | %5.f MHz | %8.2f %%";
+    else {assert(0 && "unhandled unit combination");}
+    for (int i = 0; i < n; i++)
+        if (unit[i] == UNIT_RATIO) v[i] *= 100.f;
+    print_line(label, format, v[0], v[1], v[2]);
 }
 
-static void box_drawing_datum_float3(enum datum datum, float value1, enum unit unit1, float value2, enum unit unit2, float value3, enum unit unit3) {
-    const char* label = datum_strings[datum];
-    const char* format = "";
-    if (unit1 == UNIT_VOLTS && unit2 == UNIT_AMPS && unit3 == UNIT_WATTS) format = "%8.3f V | %7.3f A | %8.3f W";
-    else if (unit1 == UNIT_WATTS && unit2 == UNIT_MEGAHERTZ && unit3 == UNIT_RATIO) format = "%7.3f W | %5.f MHz | %8.2f %%";
-    else {assert(0 && "datum_float3 unhandled unit triple");}
-    if (unit1 == UNIT_RATIO) value1 *= 100.f;
-    if (unit2 == UNIT_RATIO) value2 *= 100.f;
-    if (unit3 == UNIT_RATIO) value3 *= 100.f;
-    print_line(label, format, value1, value2, value3);
-}
-
-static void box_drawing_datum_limit(enum datum datum, float value, float limit, enum unit unit) {
-    const char* label = datum_strings[datum];
+static void print_limit(const char *label, float value, float limit, enum unit unit) {
     const char* format = "";
     switch (unit) {
         case UNIT_COUNT: format = "%7.f   | %7.f   | %8.2f %%"; break;
-        case UNIT_RATIO: assert(0 && "datum_limit ratio"); break;
-        case UNIT_MEGAHERTZ: assert(0 && "datum_limit megahertz"); break;
+        case UNIT_RATIO: assert(0 && "limit ratio"); break;
+        case UNIT_MEGAHERTZ: assert(0 && "limit megahertz"); break;
         case UNIT_VOLTS: format = "%7.3f V | %7.3f V | %8.2f %%"; break;
         case UNIT_AMPS: format = "%7.3f A | %7.f A | %8.2f %%"; break;
         case UNIT_WATTS: format = "%7.3f W | %7.f W | %8.2f %%"; break;
@@ -244,53 +163,78 @@ static void box_drawing_datum_limit(enum datum datum, float value, float limit, 
     print_line(label, format, value, limit, (value / limit) * 100.f);
 }
 
-static void box_drawing_datum_sum(enum datum datum, const float* begin, const float* end, enum unit unit) {
-    if (end - begin == 1)
-        box_drawing_datum_float(datum, *begin, UNIT_WATTS);
-    else if (end - begin == 2)
-        print_line(datum_strings[datum], "%7.3f W + %7.3f W = %7.3f W", begin[0], begin[1], begin[0]+begin[1]);
-    else if (end - begin == 4) {
-        print_line(datum_strings[datum], "%7.3f W + %7.3f W = %7s", begin[0], begin[1], "");
-        print_line("", "%7.3f W + %7.3f W = %7.3f W", begin[2], begin[3], begin[0]+begin[1]+begin[2]+begin[3]);
+static void print_sum(const char *label, int n, const float *v) {
+    if (n == 1)
+        print_value(label, KIND_GAUGE, v[0], UNIT_WATTS);
+    else if (n == 2)
+        print_line(label, "%7.3f W + %7.3f W = %7.3f W", v[0], v[1], v[0]+v[1]);
+    else if (n == 4) {
+        print_line(label, "%7.3f W + %7.3f W = %7s", v[0], v[1], "");
+        print_line("", "%7.3f W + %7.3f W = %7.3f W", v[2], v[3], v[0]+v[1]+v[2]+v[3]);
     } else {
-        assert(0 && "datum_sum unhandled length");
-        print_line(datum_strings[datum], "unhandled length %d", end - begin);
+        assert(0 && "sum unhandled length");
+        print_line(label, "unhandled length %d", n);
     }
 }
 
-static void box_drawing_core(int number, _Bool disabled, _Bool sleeping, float frequency,
-        float power, float voltage, float temperature,
-        float c0_percent, float c1_percent, float c6_percent) {
-    char number_str[8];
-    snprintf(number_str, sizeof(number_str), "Core %d", number);
+static void print_row(const struct sample *s, const struct row *row) {
+    const struct metric_def *def = &metric_defs[row->m[0]];
+    float value[3];
+    enum unit unit[3];
 
-    char frequency_str_buf[10];
-    const char* frequency_str = frequency_str_buf;
-    if (disabled)
-        frequency_str = "Disabled";
-    else if (sleeping)
-        frequency_str = "Sleeping";
-    else
-        snprintf(frequency_str_buf, sizeof(frequency_str_buf), "%4.f MHz", frequency);
+    if (row->blank_before)
+        print_line("", "");
 
-    fprintf(stdout, "│ %7s │ %10s | %6.3f W | %5.3f V | %6.2f C | C0: %5.1f %% | C1: %5.1f %% | C6: %5.1f %% │\n",
-            number_str, frequency_str, power, voltage, temperature, c0_percent, c1_percent, c6_percent);
+    switch (row->kind) {
+        case ROW_VALUE:
+            print_value(row->label, def->kind, metric_value(s, row->m[0], 0), def->unit);
+            break;
+        case ROW_LIMIT:
+            print_limit(row->label, metric_value(s, row->m[0], 0), metric_limit(s, row->m[0], 0), def->unit);
+            break;
+        case ROW_MULTI:
+            for (int i = 0; i < row->n; i++) {
+                value[i] = metric_value(s, row->m[i], 0);
+                unit[i] = metric_defs[row->m[i]].unit;
+            }
+            print_multi(row->label, row->n, value, unit);
+            break;
+        case ROW_SUM:
+            print_sum(row->label, metric_count(s, row->m[0]), s->m[row->m[0]].value);
+            break;
+    }
+}
+
+static void box_drawing_emit(const struct sample *s) {
+    if (use_control_codes)
+        fprintf(stdout, "\e[1;1H\e[2J"); //Move cursor to (1,1); Clear entire screen
+
+    if (s->experimental)
+        fprintf(stdout, "Warning: Support for this PM table version is expermiental. Can't trust anything.\n");
+
+    for (int g = 0; g < GROUP_COUNT; g++) {
+        const struct group_def *group = &group_defs[g];
+
+        if (!group_shown(s, g))
+            continue;
+
+        fprintf(stdout, "%s", group_begin_strings[g]);
+        if (g == GROUP_SYSINFO)
+            print_sysinfo(s);
+        else if (g == GROUP_CORES)
+            print_cores(s);
+        else
+            for (int r = 0; r < group->nrows; r++)
+                if (row_shown(s, &group->rows[r]))
+                    print_row(s, &group->rows[r]);
+        fprintf(stdout, "%s", group_end_strings[g]);
+    }
+
+    fflush(stdout);
 }
 
 const struct output_ops box_drawing_ops = {
     .init = box_drawing_init,
     .cleanup = box_drawing_cleanup,
-    .begin = box_drawing_begin,
-    .end = box_drawing_end,
-    .begin_group = box_drawing_begin_group,
-    .end_group = box_drawing_end_group,
-    .datum_string = box_drawing_datum_string,
-    .datum_bool = box_drawing_datum_bool,
-    .datum_int = box_drawing_datum_int,
-    .datum_float = box_drawing_datum_float,
-    .datum_float2 = box_drawing_datum_float2,
-    .datum_float3 = box_drawing_datum_float3,
-    .datum_limit = box_drawing_datum_limit,
-    .datum_sum = box_drawing_datum_sum,
-    .core = box_drawing_core,
+    .emit = box_drawing_emit,
 };

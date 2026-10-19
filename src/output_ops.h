@@ -17,6 +17,20 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  **/
 
+#ifndef OUTPUT_OPS_H
+#define OUTPUT_OPS_H
+
+#include <stdbool.h>
+
+#include "metrics.h"
+
+/**
+ * The layout every output follows: groups of rows, each row showing one
+ * to three metrics. The human-readable output prints a row per entry; the
+ * machine-readable outputs use the groups to structure their output and
+ * the row kinds to decide how to encode the metrics.
+ **/
+
 enum group {
     GROUP_SYSINFO,
     GROUP_CORES,
@@ -27,119 +41,45 @@ enum group {
     GROUP_GRAPHICS,
     GROUP_POWER,
     GROUP_POWER_REPORTS,
+    GROUP_COUNT,
 };
 
-enum datum {
-    DATUM_MODEL,
-    DATUM_CODENAME,
-    DATUM_CORES,
-    DATUM_CCDS,
-    DATUM_CCXS,
-    DATUM_CORES_PER_CCX,
-    DATUM_CORES_PER_CCD,
-    DATUM_SMU_FW_VERSION,
-    DATUM_MP1_IF_VERSION,
-
-    DATUM_PEAK_CORE_FREQ,
-    DATUM_PEAK_CORE_TEMP,
-    DATUM_PEAK_CORE_VOLTAGE,
-    DATUM_AVG_CORE_VOLTAGE,
-    DATUM_AVG_CORE_C6,
-    DATUM_TOTAL_CORE_POWER,
-
-    DATUM_PEAK_CORE_VOLTAGE_SMU,
-    DATUM_PACKAGE_C6_SMU,
-
-    DATUM_PEAK_TEMP,
-    DATUM_SOC_TEMP,
-    DATUM_GFX_TEMP,
-    DATUM_CORE_VRM_VOLTAGE_LIMIT,
-    DATUM_PPT_LIMIT,
-    DATUM_PPT_APU_LIMIT,
-    DATUM_TDC_LIMIT_NOMINAL,
-    DATUM_TDC_LIMIT_ACTUAL,
-    DATUM_TDC_SOC_LIMIT_NOMINAL,
-    DATUM_EDC_LIMIT,
-    DATUM_EDC_SOC_LIMIT,
-    DATUM_THM_LIMIT,
-    DATUM_THM_SOC_LIMIT,
-    DATUM_THM_GFX_LIMIT,
-    DATUM_FIT_LIMIT,
-
-    DATUM_MEMORY_COUPLED,
-    DATUM_FCLK_AVG,
-    DATUM_FCLK,
-    DATUM_UCLK,
-    DATUM_MCLK,
-    DATUM_VDDM,
-    DATUM_VDDP,
-    DATUM_VDDG,
-    DATUM_VDDG_IOD,
-    DATUM_VDDG_CCD,
-
-    DATUM_GFX_VOLTAGE_ROC_POWER,
-    DATUM_GFX_FREQ_REAL_EFF,
-    DATUM_GFX_BUSY,
-    DATUM_GFX_EDC_LIMIT_RESIDENCY,
-    DATUM_GFX_DISPLAY_COUNT_FPS,
-    DATUM_GFX_DGPU_POWER_FREQ_TARGET_BUSY,
-
-    DATUM_VDDR_SOC_POWER,
-    DATUM_IO_VDDR_SOC_POWER,
-    DATUM_GMI2_VDDG_POWER,
-    DATUM_ROC_POWER,
-    DATUM_L3_LOGIC_POWER,
-    DATUM_L3_VDDM_POWER,
-    DATUM_VDDIO_MEM_POWER,
-    DATUM_IOD_VDDIO_MEM_POWER,
-    DATUM_DDR_VDDP_POWER,
-    DATUM_DDR_PHY_POWER,
-    DATUM_VDD18_POWER,
-    DATUM_IO_DISPLAY_POWER,
-    DATUM_IO_USB_POWER,
-    DATUM_CALC_TOTAL_POWER,
-
-    DATUM_SVI2_SOC_POWER,
-    DATUM_SVI2_CORE_POWER,
-    DATUM_SMU_CORE_POWER,
-    DATUM_SMU_SOCKET_POWER,
-    DATUM_SMU_PACKAGE_POWER,
+enum row_kind {
+    ROW_VALUE,          // m[0]
+    ROW_LIMIT,          // m[0], a KIND_LIMIT metric: value, limit and usage
+    ROW_MULTI,          // m[0..n-1] side by side
+    ROW_SUM,            // m[0], an INDEX_L3 metric: all values and their sum
 };
 
-enum unit {
-    UNIT_COUNT,
-    UNIT_RATIO,
-    // Most frequencies in the tables are MHz, except for core frequency which
-    // is in GHz.  There's no point in converting to Hz and back.
-    UNIT_MEGAHERTZ,
-    UNIT_VOLTS,
-    UNIT_AMPS,
-    UNIT_WATTS,
-    UNIT_CELSIUS,
+struct row {
+    enum row_kind kind;
+    const char *label;
+    int n;
+    enum metric_id m[3];
+    bool blank_before;
 };
+
+struct group_def {
+    const char *key;
+    const struct row *rows;     // NULL for groups with their own layout (sysinfo, cores)
+    int nrows;
+};
+
+extern const struct group_def group_defs[GROUP_COUNT];
+
+// Whether a group has anything to show in this sample.
+bool group_shown(const struct sample *s, enum group group);
+// Whether a row has anything to show in this sample.
+bool row_shown(const struct sample *s, const struct row *row);
 
 struct output_ops {
-    void (*init)(_Bool repeating, _Bool interactive);
-    void (*cleanup)();
-
-    void (*begin)();
-    void (*end)();
-
-    void (*begin_group)(enum group group);
-    void (*end_group)(enum group group);
-
-    void (*datum_string)(enum datum datum, const char* value);
-    void (*datum_bool)(enum datum datum, _Bool value);
-    void (*datum_int)(enum datum datum, int value, enum unit unit);
-    void (*datum_float)(enum datum datum, float value, enum unit unit);
-    void (*datum_float2)(enum datum datum, float value1, enum unit unit1, float value2, enum unit unit2);
-    void (*datum_float3)(enum datum datum, float value1, enum unit unit1, float value2, enum unit unit2, float value3, enum unit unit3);
-    void (*datum_limit)(enum datum datum, float value, float limit, enum unit unit);
-    void (*datum_sum)(enum datum datum, const float* begin, const float* end, enum unit unit);
-
-    void (*core)(int number, _Bool disabled, _Bool sleeping, float frequency, float power, float voltage, float temperature, float c0_percent, float c1_percent, float c6_percent);
+    void (*init)(bool repeating, bool interactive);
+    void (*cleanup)(void);
+    void (*emit)(const struct sample *s);
 };
 
 extern const struct output_ops box_drawing_ops;
 extern const struct output_ops json_ops;
 extern const struct output_ops ndjson_ops;
+
+#endif
