@@ -58,6 +58,7 @@ static struct display display = { .views = VIEWS_DEFAULT };
 //Same, but with 0 as return. For summations that should not fail if one value is not present.
 #define pmta0(elem) ((pmt->elem)?(*pmt->elem):0)
 
+static bool dump_table = false;
 static const char *export_path = NULL;
 static bool export_created = false;
 
@@ -387,6 +388,17 @@ static void write_dumpfile(const char *path) {
     free(pm_buf);
 }
 
+// Print every element of a PM table as "index<TAB>value".
+static void print_table_elements(const unsigned char *buf, unsigned int size) {
+    float v;
+
+    fprintf(stdout, "\n\n");
+    for (unsigned int i = 0; i < size / sizeof(v); i++) {
+        memcpy(&v, buf + i * sizeof(v), sizeof(v));
+        fprintf(stdout, "%u\t%f\n", i, v);
+    }
+}
+
 void read_from_dumpfile(char *dumpfile, unsigned int version, const struct output_ops* ops) {
     unsigned char readbuf[10240];
     unsigned int bytes_read;
@@ -432,6 +444,9 @@ void read_from_dumpfile(char *dumpfile, unsigned int version, const struct outpu
     emit_sample(&pmt, &sysinfo, ops);
     ops->cleanup();
     export_cleanup();
+
+    if (dump_table)
+        print_table_elements(readbuf, bytes_read);
 }
 
 void print_version() {
@@ -453,6 +468,7 @@ void show_help(char* program) {
             "\t-u, --update=<seconds>    - Update the monitoring only after this number of second(s) have passed. Defaults to 1.\n"
             "\t-f, --forcetable=<hex>    - Force to use a specific PM table version.\n"
             "\t-t, --dumpfile=<filename> - Test mode. Read PM Table from raw-dumfile. Use in conjunction with -f\n"
+            "\t    --dumptable           - With -t, also print every element of the table.\n"
             "\t-w, --writedump=<file>    - Save the PM Table to <file>, with the table version prepended to the name.\n"
             "\t-o, --format=<format>     - Output format (boxdrawing, text, json, ndjson, influx, prometheus, netdata)\n"
             "\t-1, --once                - Print once and exit\n"
@@ -498,7 +514,7 @@ int main(int argc, char** argv) {
     }
 
     //Parse arguments
-    enum { OPT_VIEW = 0x100, OPT_TEST_EXPORT };
+    enum { OPT_VIEW = 0x100, OPT_TEST_EXPORT, OPT_DUMPTABLE };
     static const struct option long_options[] = {
         { "help",       no_argument,       NULL, 'h' },
         { "version",    no_argument,       NULL, 'v' },
@@ -507,6 +523,7 @@ int main(int argc, char** argv) {
         { "update",     required_argument, NULL, 'u' },
         { "forcetable", required_argument, NULL, 'f' },
         { "dumpfile",   required_argument, NULL, 't' },
+        { "dumptable",  no_argument,       NULL, OPT_DUMPTABLE },
         { "writedump",  required_argument, NULL, 'w' },
         { "format",     required_argument, NULL, 'o' },
         { "once",       no_argument,       NULL, '1' },
@@ -578,7 +595,9 @@ int main(int argc, char** argv) {
             case 'w':
                 writedump = optarg;
                 break;
-
+            case OPT_DUMPTABLE:
+                dump_table = true;
+                break;
             case OPT_TEST_EXPORT:
                 ops = &influx_ops;
                 format_set = true;
