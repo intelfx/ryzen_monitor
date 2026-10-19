@@ -263,8 +263,8 @@ void show_help(char* program) {
             "\t-d            - Show disabled cores.\n"
             "\t-u<seconds>   - Update the monitoring only after this number of second(s) have passed. Defaults to 1.\n"
             "\t-f<hex-value> - Force to use a specific PM table version.\n"
-            "\t-t<filename>  - Test mode. Read PM Table from raw-dumfile. Use in conjunction with -f\n",
-            "\t-o<format>    - Output format (boxdrawing, json, ndjson)\n",
+            "\t-t<filename>  - Test mode. Read PM Table from raw-dumfile. Use in conjunction with -f\n"
+            "\t-o<format>    - Output format (boxdrawing, json, ndjson)\n"
             "\t-1            - Print once and exit\n",
         program
     );
