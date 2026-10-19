@@ -18,6 +18,7 @@
 
 #include <sys/stat.h>
 #include <unistd.h>
+#include <errno.h>
 #include <stdlib.h>
 #include <fcntl.h>
 
@@ -34,6 +35,7 @@
 #define SMU_ARG_PATH                    DRIVER_CLASS_PATH "smu_args"
 #define RSMU_CMD_PATH                   DRIVER_CLASS_PATH "rsmu_cmd"
 #define MP1_SMU_CMD_PATH                DRIVER_CLASS_PATH "mp1_smu_cmd"
+#define HSMP_SMU_CMD_PATH               DRIVER_CLASS_PATH "hsmp_smu_cmd"
 
 #define PM_VERSION_PATH                 DRIVER_CLASS_PATH "pm_table_version"
 #define PM_SIZE_PATH                    DRIVER_CLASS_PATH "pm_table_size"
@@ -45,7 +47,7 @@
 /* Maximum is defined as: "255.255.255.255\n" */
 #define LIBSMU_MAX_SMU_VERSION_LEN      16
 
-int try_open_path(const char* pathname, int mode, int* fd) {
+static int try_open_path(const char* pathname, int mode, int* fd) {
     int ret = 1;
 
     *fd = open(pathname, mode);
@@ -57,10 +59,10 @@ int try_open_path(const char* pathname, int mode, int* fd) {
     return ret;
 }
 
-smu_return_val smu_init_parse(smu_obj_t* obj) {
+static smu_return_val smu_init_parse(smu_obj_t* obj) {
     int ver_maj, ver_min, ver_rev, ver_alt, len, i, c;
     char rd_buf[1024];
-    int tmp_fd, ret, ok;
+    int tmp_fd, ret;
 
     memset(rd_buf, 0, sizeof(rd_buf));
 
@@ -75,12 +77,7 @@ smu_return_val smu_init_parse(smu_obj_t* obj) {
         return SMU_Return_RWError;
 
     // The driver version must match the expected exactly.
-    if (rd_buf[strlen(rd_buf)-1]=='\n') rd_buf[strlen(rd_buf)-1]=0;
-    printf("ryzen_smu version string: %s\n", rd_buf);
-    for (i=0,ok=0; i<KERNEL_DRIVER_SUPP_VERS_COUNT; i++)
-        if (!strcmp(rd_buf, kernel_driver_supported_versions[i]))
-            ok=1;
-    if (!ok)
+    if (strcmp(rd_buf, LIBSMU_SUPPORTED_DRIVER_VERSION "\n"))
         return SMU_Return_DriverVersion;
 
     sscanf(rd_buf, "%d.%d.%d\n", &ver_maj, &ver_min, &ver_rev);
@@ -101,8 +98,8 @@ smu_return_val smu_init_parse(smu_obj_t* obj) {
         if (rd_buf[i] == '.')
             c++;
 
-    // Depending on the processor, there can be either a 3 or 4 part segment.
-    // We account for both
+    // Depending on the processor, there can be either a 3 or 4 part version segmentation.
+    // We account for both.
     switch (c) {
         case 2:
             ret = sscanf(rd_buf, "%d.%d.%d\n", &ver_maj, &ver_min, &ver_rev);
@@ -151,20 +148,20 @@ smu_return_val smu_init_parse(smu_obj_t* obj) {
         return SMU_Return_RWError;
 
     // This file doesn't need to exist if PM Tables aren't supported.
-    if (!try_open_path(PM_VERSION_PATH, O_RDONLY, &tmp_fd))
+    if (!try_open_path(PM_SIZE_PATH, O_RDONLY, &tmp_fd))
         return SMU_Return_OK;
-    
-    ret = read(tmp_fd, &obj->pm_table_version, sizeof(obj->pm_table_version));
+
+    ret = read(tmp_fd, &obj->pm_table_size, sizeof(obj->pm_table_size));
     close(tmp_fd);
 
     if (ret <= 0)
         return SMU_Return_RWError;
 
-    // If the PM table contains a version, a size file MUST exist.
-    if (!try_open_path(PM_SIZE_PATH, O_RDONLY, &tmp_fd))
-        return SMU_Return_RWError;
-    
-    ret = read(tmp_fd, &obj->pm_table_size, sizeof(obj->pm_table_size));
+    // Some platforms will also have a version file.
+    if (!try_open_path(PM_VERSION_PATH, O_RDONLY, &tmp_fd))
+        return SMU_Return_OK;
+
+    ret = read(tmp_fd, &obj->pm_table_version, sizeof(obj->pm_table_version));
     close(tmp_fd);
 
     if (ret <= 0)
@@ -173,7 +170,7 @@ smu_return_val smu_init_parse(smu_obj_t* obj) {
     return SMU_Return_OK;
 }
 
-int smu_init(smu_obj_t* obj) {
+smu_return_val smu_init(smu_obj_t* obj) {
     int i, ret;
 
     memset(obj, 0, sizeof(*obj));
@@ -186,6 +183,7 @@ int smu_init(smu_obj_t* obj) {
     // The driver must provide access to these files.
     if (!try_open_path(SMN_PATH, O_RDWR, &obj->fd_smn) ||
         !try_open_path(MP1_SMU_CMD_PATH, O_RDWR, &obj->fd_mp1_smu_cmd) ||
+        !try_open_path(HSMP_SMU_CMD_PATH, O_RDWR, &obj->fd_hsmp_smu_cmd) ||
         !try_open_path(SMU_ARG_PATH, O_RDWR, &obj->fd_smu_args))
         return SMU_Return_RWError;
 
@@ -208,6 +206,9 @@ int smu_init(smu_obj_t* obj) {
 void smu_free(smu_obj_t* obj) {
     int i;
 
+    if (!obj->init)
+        return;
+
     if (obj->fd_smn)
         close(obj->fd_smn);
 
@@ -216,6 +217,9 @@ void smu_free(smu_obj_t* obj) {
 
     if (obj->fd_mp1_smu_cmd)
         close(obj->fd_mp1_smu_cmd);
+
+    if (obj->fd_hsmp_smu_cmd)
+        close(obj->fd_hsmp_smu_cmd);
 
     if (obj->fd_smu_args)
         close(obj->fd_smu_args);
@@ -235,6 +239,7 @@ const char* smu_get_fw_version(smu_obj_t* obj) {
     if (!obj->init)
         return "Uninitialized";
 
+    // Determine if this is a 24-bit or 32-bit version and show it accordingly.
     if (obj->smu_version & 0xff000000) {
         sprintf(fw, "%d.%d.%d.%d",
             (obj->smu_version >> 24) & 0xff, (obj->smu_version >> 16) & 0xff,
@@ -248,8 +253,12 @@ const char* smu_get_fw_version(smu_obj_t* obj) {
     return fw;
 }
 
-unsigned int smu_read_smn_addr(smu_obj_t* obj, unsigned int address, unsigned int* result) {
+smu_return_val smu_read_smn_addr(smu_obj_t* obj, unsigned int address, unsigned int* result) {
     unsigned int ret;
+
+    // Don't attempt to execute without initialization.
+    if (!obj->init)
+        return SMU_Return_Failed;
 
     pthread_mutex_lock(&obj->lock[SMU_MUTEX_SMN]);
 
@@ -271,6 +280,12 @@ BREAK_OUT:
 smu_return_val smu_write_smn_addr(smu_obj_t* obj, unsigned int address, unsigned int value) {
     unsigned int buffer[2], ret;
 
+    // Don't attempt to execute without initialization.
+    if (!obj->init)
+        return SMU_Return_Failed;
+
+    // buffer[0] contains the destination write target.
+    // buffer[1] contains the value to write to the address.
     buffer[0] = address;
     buffer[1] = value;
 
@@ -284,31 +299,38 @@ smu_return_val smu_write_smn_addr(smu_obj_t* obj, unsigned int address, unsigned
     return ret == sizeof(buffer) ? SMU_Return_OK : SMU_Return_RWError;
 }
 
-smu_return_val smu_send_command(smu_obj_t* obj, unsigned int op, smu_arg_t args,
+smu_return_val smu_send_command(smu_obj_t* obj, unsigned int op, smu_arg_t* args,
     enum smu_mailbox mailbox) {
     unsigned int ret, status, fd_smu_cmd;
 
+    // Don't attempt to execute without initialization.
+    if (!obj->init)
+        return SMU_Return_Failed;
+
     switch (mailbox) {
-        case TYPE_RSMU:
+        case SMU_TYPE_RSMU:
             fd_smu_cmd = obj->fd_rsmu_cmd;
             break;
-        case TYPE_MP1:
+        case SMU_TYPE_MP1:
             fd_smu_cmd = obj->fd_mp1_smu_cmd;
+            break;
+        case SMU_TYPE_HSMP:
+            fd_smu_cmd = obj->fd_hsmp_smu_cmd;
             break;
         default:
             return SMU_Return_Unsupported;
     }
 
-    // Check if fd is valid
+    // Check if fd is valid.
     if (!fd_smu_cmd)
         return SMU_Return_Unsupported;
 
     pthread_mutex_lock(&obj->lock[SMU_MUTEX_CMD]);
 
     lseek(obj->fd_smu_args, 0, SEEK_SET);
-    ret = write(obj->fd_smu_args, args.args, sizeof(args));
+    ret = write(obj->fd_smu_args, args->args, sizeof(*args));
 
-    if (ret != sizeof(args)) {
+    if (ret != sizeof(*args)) {
         ret = SMU_Return_RWError;
         goto BREAK_OUT;
     }
@@ -321,6 +343,9 @@ smu_return_val smu_send_command(smu_obj_t* obj, unsigned int op, smu_arg_t args,
         goto BREAK_OUT;
     }
 
+    // Commands should be completed instantly as the driver attempts to continuously
+    //  execute it till a timeout has occurred and immediately updates the result.
+    // Therefore it shouldn't be necessary to apply any sort of waiting here.
     lseek(fd_smu_cmd, 0, SEEK_SET);
     ret = read(fd_smu_cmd, &status, sizeof(status));
 
@@ -331,10 +356,9 @@ smu_return_val smu_send_command(smu_obj_t* obj, unsigned int op, smu_arg_t args,
 
     if (ret == SMU_Return_OK) {
         lseek(obj->fd_smu_args, 0, SEEK_SET);
-        ret = read(obj->fd_smu_args, args.args, sizeof(args.args));
-
-        if (ret != sizeof(args.args))
-            ret = SMU_Return_RWError;
+        ret = read(obj->fd_smu_args, args->args, sizeof(args->args)) == sizeof(args->args)
+            ? SMU_Return_OK
+            : SMU_Return_RWError;
     }
 
 BREAK_OUT:
@@ -345,16 +369,31 @@ BREAK_OUT:
 
 smu_return_val smu_read_pm_table(smu_obj_t* obj, unsigned char* dst, size_t dst_len) {
     int ret;
+    size_t total;
+
+    // Don't attempt to execute without initialization.
+    if (!obj->init)
+        return SMU_Return_Failed;
 
     if (dst_len != obj->pm_table_size)
         return SMU_Return_InsufficientSize;
 
     pthread_mutex_lock(&obj->lock[SMU_MUTEX_PM]);
 
+    // The table is served in page-sized chunks: the read at offset 0 refreshes it from the
+    // SMU, the following reads of the same pass return that snapshot.
     lseek(obj->fd_pm_table, 0, SEEK_SET);
-    ret = read(obj->fd_pm_table, dst, obj->pm_table_size);
+    total = 0;
+    while (total < obj->pm_table_size) {
+        ret = read(obj->fd_pm_table, dst + total, obj->pm_table_size - total);
+        if (ret < 0 && errno == EINTR)
+            continue;
+        if (ret <= 0)
+            break;
+        total += ret;
+    }
 
-    if (ret != obj->pm_table_size)
+    if (total != obj->pm_table_size)
         ret = SMU_Return_RWError;
     else
         ret = SMU_Return_OK;
@@ -386,6 +425,8 @@ const char* smu_return_to_str(smu_return_val val) {
             return "Insufficient Buffer Size Provided";
         case SMU_Return_MappedError:
             return "Memory Mapping I/O Error";
+        case SMU_Return_PCIFailed:
+            return "PCIe Programming Error";
         case SMU_Return_DriverNotPresent:
             return "SMU Driver Not Present Or Fault";
         case SMU_Return_RWError:
@@ -398,44 +439,9 @@ const char* smu_return_to_str(smu_return_val val) {
 }
 
 const char* smu_codename_to_str(smu_obj_t* obj) {
-    switch (obj->codename) {
-        case CODENAME_CASTLEPEAK:
-            return "CastlePeak";
-        case CODENAME_COLFAX:
-            return "Colfax";
-        case CODENAME_MATISSE:
-            return "Matisse";
-        case CODENAME_PICASSO:
-            return "Picasso";
-        case CODENAME_PINNACLERIDGE:
-            return "Pinnacle Ridge";
-        case CODENAME_RAVENRIDGE2:
-            return "Raven Ridge 2";
-        case CODENAME_RAVENRIDGE:
-            return "Raven Ridge";
-        case CODENAME_RENOIR:
-            return "Renoir";
-        case CODENAME_SUMMITRIDGE:
-            return "Summit Ridge";
-        case CODENAME_THREADRIPPER:
-            return "Thread Ripper";
-        case CODENAME_REMBRANT:
-            return "Rembrant";
-        case CODENAME_VERMEER:
-            return "Vermeer";
-        case CODENAME_VANGOGH:
-            return "Van Gogh";
-        case CODENAME_CEZANNE:
-            return "Cezanne";
-        case CODENAME_MILAN:
-            return "Milan";
-        case CODENAME_DALI:
-            return "Dali";
-        default:
-            return "Undefined";
-    }
+    return smu_codename_name(obj->codename);
 }
 
 unsigned int smu_pm_tables_supported(smu_obj_t* obj) {
-    return obj->pm_table_size && obj->pm_table_version;
+    return obj->pm_table_size;
 }

@@ -10,12 +10,14 @@ OUT = ryzen_monitor
 SRC = \
       ryzen_monitor.c \
       libsmu.c \
+      smu_common.c \
       pm_tables.c \
       readinfo.c \
       # EOL
 OBJ = $(SRC:.c=.o)
 
 vpath libsmu.c $(LIBSMU_DIR)
+vpath smu_common.c $(LIBSMU_DIR)
 
 all: $(OUT)
 
