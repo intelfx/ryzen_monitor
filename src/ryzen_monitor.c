@@ -115,36 +115,6 @@ static void emit_sample(const pm_table *pmt, const system_info *sysinfo, const s
     }
 }
 
-int select_pm_table_version(unsigned int version, pm_table *pmt, unsigned char *pm_buf) {
-    //Initialize pmt to 0. This also sets all pointers to 0, which signifies non-existiting fields.
-    //Access via pmta(...) will check if pointer is 0 before trying to access the value.
-    memset(pmt, 0, sizeof(pm_table));
-
-     //Select matching PM Table
-    switch(version) {
-        case 0x380904: pm_table_0x380904(pmt, pm_buf); break; //Ryzen 5600X
-        case 0x380905: pm_table_0x380905(pmt, pm_buf); break; //Ryzen 5600X
-        case 0x380804: pm_table_0x380804(pmt, pm_buf); break; //Ryzen 5900X / 5950X
-        case 0x380805: pm_table_0x380805(pmt, pm_buf); break; //Ryzen 5900X / 5950X
-        case 0x400005: pm_table_0x400005(pmt, pm_buf); break; //Ryzen 5700G
-        case 0x240903: pm_table_0x240903(pmt, pm_buf); break; //Ryzen 3700X / 3800X
-        case 0x240803: pm_table_0x240803(pmt, pm_buf); break; //Ryzen 3950X
-        default:
-            return 0;
-    }
-
-    //Avoid access bejond bounds of the defined arrays.
-    if (pmt->max_l3 > PMT_MAX_NUM_L3) pmt->max_l3 = PMT_MAX_NUM_L3;
-    if (pmt->max_cores > PMT_MAX_NUM_CORES) pmt->max_cores = PMT_MAX_NUM_CORES;
-
-    //APML_POWER is probably identical to PACKAGE_POWER
-    if (pmt->PACKAGE_POWER == NULL) pmt->PACKAGE_POWER = pmt->APML_POWER;
-
-    if (pmt->VDD18_POWER == NULL) pmt->VDD18_POWER = pmt->IO_VDD18_POWER;
-
-    return 1;
-}
-
 void disabled_cores_0x400005(pm_table *pmt, system_info *sysinfo) {
     int i, mask;
     float power, voltage, fit, iddmax, freq, freqeff, c0, cc1, irm;
