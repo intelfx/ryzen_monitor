@@ -92,7 +92,7 @@ static void print_sysinfo(const struct sample *s) {
 static void print_cores(const struct sample *s) {
     for (int i = 0; i < s->ncores; i++) {
         const struct core_state *core = &s->core[i];
-        char number_str[8];
+        char number_str[16];
         char frequency_str_buf[10];
         const char* frequency_str = frequency_str_buf;
 
