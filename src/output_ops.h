@@ -119,5 +119,6 @@ struct output_ops {
 extern const struct output_ops box_drawing_ops;
 extern const struct output_ops json_ops;
 extern const struct output_ops ndjson_ops;
+extern const struct output_ops text_ops;
 
 #endif
