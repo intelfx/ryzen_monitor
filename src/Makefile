@@ -1,17 +1,21 @@
 CC ?= gcc
 CFLAGS ?= -O3 -mtune=native -march=native
 
-override CFLAGS += -Ilib
+LIBSMU_DIR ?= lib
+
+override CFLAGS += -I$(LIBSMU_DIR)
 LDLIBS = -lm
 
 OUT = ryzen_monitor
 SRC = \
       ryzen_monitor.c \
-      lib/libsmu.c \
+      libsmu.c \
       pm_tables.c \
       readinfo.c \
       # EOL
 OBJ = $(SRC:.c=.o)
+
+vpath libsmu.c $(LIBSMU_DIR)
 
 all: $(OUT)
 
@@ -19,4 +23,4 @@ $(OUT): $(OBJ)
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
 clean:
-	rm -rf *.o lib/*.o
+	rm -f $(OBJ)
