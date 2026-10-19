@@ -12,6 +12,7 @@ SRC = \
       libsmu.c \
       smu_common.c \
       pm_tables.c \
+      pm_tables_zen1.c \
       pm_tables_zen2.c \
       pm_tables_zen3.c \
       readinfo.c \

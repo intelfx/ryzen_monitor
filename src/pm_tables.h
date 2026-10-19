@@ -48,6 +48,7 @@ typedef struct {
     float *TDC_VALUE_SOC;
     float *THM_LIMIT;
     float *THM_VALUE;
+    float *THM_VALUE_CORES[PMT_MAX_NUM_CORES]; //Per core, where there is no package value
     float *THM_LIMIT_SOC;
     float *THM_VALUE_SOC;
     float *THM_LIMIT_GFX;
@@ -163,11 +164,13 @@ typedef struct {
     float *IO_VDD18_POWER; 
     float *TDP;
     float *DETERMINISM;
+    float *P_VDDM;
     float *V_VDDM;
     float *V_VDDP;
     float *V_VDDG;
     float *V_VDDG_IOD;
     float *V_VDDG_CCD;
+    float *SKIN_TEMP_MARGIN;
     float *PEAK_TEMP;
     float *PEAK_VOLTAGE;
     float *PEAK_CCLK_FREQ;
@@ -274,6 +277,7 @@ typedef struct {
     float *GFX_EDC_LIM;
     float *GFX_EDC_RESIDENCY;
     float *GFX_DEM_RESIDENCY;
+    float *GFX_DUTY;
 
     float *DF_BUSY;
     float *IOHC_BUSY;
@@ -376,6 +380,7 @@ void pm_table_0x240903(pm_table *pmt, void* base_addr); //3700X: Zen2,  8 cores,
 void pm_table_0x240803(pm_table *pmt, void* base_addr); //3950X: Zen2, 16 cores, version 3
 void pm_table_0x370003(pm_table *pmt, void* base_addr); //Zen2, 8 cores, GPU, version 3; Lucienne, Renoir
 void pm_table_0x370005(pm_table *pmt, void* base_addr); //Zen2, 8 cores, GPU, version 5; Lucienne, Renoir
+void pm_table_0x1E0004(pm_table *pmt, void* base_addr); //Zen+, 4 cores, GPU, version 4; Picasso
 
 // Map pm_buf as PM Table version into pmt. Returns 0 if the version is unknown.
 int select_pm_table_version(unsigned int version, pm_table *pmt, unsigned char *pm_buf);

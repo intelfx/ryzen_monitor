@@ -39,6 +39,7 @@ static const struct {
     { 0x240803, pm_table_0x240803 }, //Ryzen 3950X
     { 0x370003, pm_table_0x370003 }, //Lucienne, Renoir
     { 0x370005, pm_table_0x370005 }, //Lucienne, Renoir
+    { 0x1E0004, pm_table_0x1E0004 }, //Picasso
 };
 
 int select_pm_table_version(unsigned int version, pm_table *pmt, unsigned char *pm_buf) {
