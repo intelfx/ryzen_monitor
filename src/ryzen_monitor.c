@@ -192,10 +192,8 @@ void start_pm_monitor(unsigned int force, int repeating, const struct output_ops
     ops->init(repeating, isatty(fileno(stdout)));
 
     do {
-        if (smu_read_pm_table(&obj, pm_buf, obj.pm_table_size) != SMU_Return_OK)
-            continue;
-
-        emit_sample(&pmt, &sysinfo, ops);
+        if (smu_read_pm_table(&obj, pm_buf, obj.pm_table_size) == SMU_Return_OK)
+            emit_sample(&pmt, &sysinfo, ops);
 
         nanosleep(&update_time_s, NULL);
     } while (repeating && !stop_requested);
