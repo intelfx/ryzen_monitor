@@ -58,12 +58,60 @@ static struct display display = { .views = VIEWS_DEFAULT };
 //Same, but with 0 as return. For summations that should not fail if one value is not present.
 #define pmta0(elem) ((pmt->elem)?(*pmt->elem):0)
 
+static const char *export_path = NULL;
+static bool export_created = false;
+
+// Create the export FIFO unless it exists already.
+static void export_setup(void) {
+    struct stat st;
+
+    if (stat(export_path, &st) == 0) {
+        if (!S_ISFIFO(st.st_mode)) {
+            fprintf(stderr, "%s exists and is not a named pipe.\n", export_path);
+            exit(-1);
+        }
+        return;
+    }
+    if (mkfifo(export_path, 0644) != 0) {
+        perror("Can't create named pipe for export");
+        exit(-1);
+    }
+    export_created = true;
+    // A reader that goes away must not kill us.
+    signal(SIGPIPE, SIG_IGN);
+}
+
+static void export_cleanup(void) {
+    if (export_created)
+        unlink(export_path);
+}
+
 static void emit_sample(const pm_table *pmt, const system_info *sysinfo, const struct output_ops *ops) {
     struct sample_options opts = { .show_disabled_cores = show_disabled_cores };
     struct sample sample;
+    int fd, saved_stdout = -1;
 
     compute_sample(pmt, sysinfo, &opts, &sample);
+
+    // Each sample goes to whoever opens the FIFO next; this waits for a reader.
+    if (export_path) {
+        fd = open(export_path, O_WRONLY);
+        if (fd < 0)
+            return;
+        fflush(stdout);
+        saved_stdout = dup(STDOUT_FILENO);
+        dup2(fd, STDOUT_FILENO);
+        close(fd);
+    }
+
     ops->emit(&sample, &display);
+
+    if (export_path) {
+        fflush(stdout);
+        clearerr(stdout);
+        dup2(saved_stdout, STDOUT_FILENO);
+        close(saved_stdout);
+    }
 }
 
 int select_pm_table_version(unsigned int version, pm_table *pmt, unsigned char *pm_buf) {
@@ -256,11 +304,14 @@ void start_pm_monitor(unsigned int force, int repeating, const struct output_ops
         default:            sysinfo.if_ver =  0; break;
     }
 
-    interactive = repeating && isatty(STDIN_FILENO) && isatty(STDOUT_FILENO);
+    interactive = repeating && !export_path && isatty(STDIN_FILENO) && isatty(STDOUT_FILENO);
     if (interactive)
         terminal_setup();
 
-    ops->init(repeating, isatty(fileno(stdout)));
+    if (export_path)
+        export_setup();
+
+    ops->init(repeating, !export_path && isatty(fileno(stdout)));
 
     do {
         struct timespec deadline;
@@ -301,6 +352,7 @@ void start_pm_monitor(unsigned int force, int repeating, const struct output_ops
 
     ops->cleanup();
     terminal_restore();
+    export_cleanup();
 }
 
 void read_from_dumpfile(char *dumpfile, unsigned int version, const struct output_ops* ops) {
@@ -342,9 +394,12 @@ void read_from_dumpfile(char *dumpfile, unsigned int version, const struct outpu
     sysinfo.core_disable_map=0;
     sysinfo.cores=sysinfo.enabled_cores_count;
 
-    ops->init(0, isatty(fileno(stdout)));
+    if (export_path)
+        export_setup();
+    ops->init(0, !export_path && isatty(fileno(stdout)));
     emit_sample(&pmt, &sysinfo, ops);
     ops->cleanup();
+    export_cleanup();
 }
 
 void print_version() {
@@ -370,6 +425,9 @@ void show_help(char* program) {
             "\t-1, --once                - Print once and exit\n"
             "\t    --view=<view>[,...]   - Show only these views (info, cores, stats, electrical, memory, gfx, power, summary, all)\n"
             "\t-c, --compact             - Leave out details.\n"
+            "\t-e, --export=<path>       - Write every sample to this named pipe (created if needed), for telegraf.\n"
+            "\t                            The format defaults to influx.\n"
+            "\t    --test-export         - Same as --format=influx.\n"
             "\n"
         "Keys in the interactive monitor:\n"
             "\tq - quit, c - compact mode, i/k/s/e/m/g/p/y - info/cores/stats/electrical/memory/gfx/power/summary view\n",
@@ -394,6 +452,7 @@ int main(int argc, char** argv) {
     int c=0, force=0, core=0, printtimings=0, repeating=1;
     char *dumpfile=0;
     const struct output_ops* ops = &box_drawing_ops;
+    bool format_set = false;
 
     //Set up signal handlers. Without SA_RESTART, so that blocking calls return
     //and the main loop notices the request to stop.
@@ -406,7 +465,7 @@ int main(int argc, char** argv) {
     }
 
     //Parse arguments
-    enum { OPT_VIEW = 0x100 };
+    enum { OPT_VIEW = 0x100, OPT_TEST_EXPORT };
     static const struct option long_options[] = {
         { "help",       no_argument,       NULL, 'h' },
         { "version",    no_argument,       NULL, 'v' },
@@ -419,10 +478,12 @@ int main(int argc, char** argv) {
         { "once",       no_argument,       NULL, '1' },
         { "view",       required_argument, NULL, OPT_VIEW },
         { "compact",    no_argument,       NULL, 'c' },
+        { "export",     required_argument, NULL, 'e' },
+        { "test-export", no_argument,      NULL, OPT_TEST_EXPORT },
         { 0 }
     };
 
-    while ((c = getopt_long(argc, argv, "vmd::f:t:u:o:1ch", long_options, NULL)) != -1) {
+    while ((c = getopt_long(argc, argv, "vmd::f:t:u:o:1ce:h", long_options, NULL)) != -1) {
         switch (c) {
             case 'v':
                 print_version();
@@ -465,12 +526,20 @@ int main(int argc, char** argv) {
                     show_help(argv[0]);
                     exit(0);
                 }
+                format_set = true;
                 break;
             case '1':
                 repeating = 0;
                 break;
             case 'c':
                 display.compact = true;
+                break;
+            case 'e':
+                export_path = optarg;
+                break;
+            case OPT_TEST_EXPORT:
+                ops = &influx_ops;
+                format_set = true;
                 break;
             case OPT_VIEW:
                 if (!parse_views(optarg, &display.views)) {
@@ -493,6 +562,9 @@ int main(int argc, char** argv) {
 
     if (!repeating)
         update_time_s.tv_sec = update_time_s.tv_nsec = 0;
+
+    if (export_path && !format_set)
+        ops = &influx_ops;
 
     if(dumpfile && !printtimings)
         read_from_dumpfile(dumpfile, force, ops);
