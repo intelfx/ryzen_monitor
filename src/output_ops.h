@@ -85,6 +85,7 @@ enum view {
 
 struct view_def {
     const char *key;
+    char hotkey;                // toggles the view in the interactive monitor
     unsigned int groups;        // bit per enum group
 };
 

@@ -26,6 +26,9 @@
 #include <sched.h>
 #include <fcntl.h>
 #include <getopt.h>
+#include <errno.h>
+#include <poll.h>
+#include <termios.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
@@ -132,10 +135,74 @@ void signal_interrupt(int sig) {
     }
 }
 
+static struct termios saved_termios;
+static bool terminal_raw = false;
+
+static void terminal_restore(void) {
+    if (terminal_raw) {
+        tcsetattr(STDIN_FILENO, TCSANOW, &saved_termios);
+        terminal_raw = false;
+    }
+}
+
+// Deliver key presses one at a time and without echo.
+static void terminal_setup(void) {
+    struct termios t;
+
+    if (tcgetattr(STDIN_FILENO, &saved_termios) != 0)
+        return;
+    t = saved_termios;
+    t.c_lflag &= ~(ICANON | ECHO);
+    t.c_cc[VMIN] = 1;
+    t.c_cc[VTIME] = 0;
+    if (tcsetattr(STDIN_FILENO, TCSANOW, &t) == 0) {
+        terminal_raw = true;
+        atexit(terminal_restore);
+    }
+}
+
+enum { KEY_TIMEOUT = -1, KEY_EOF = -2 };
+
+// Wait for a key press until the deadline (CLOCK_MONOTONIC).
+static int wait_for_key(const struct timespec *deadline) {
+    for (;;) {
+        struct pollfd pfd = { .fd = STDIN_FILENO, .events = POLLIN };
+        struct timespec now;
+        unsigned char key;
+        long timeout_ms;
+        int ret;
+
+        clock_gettime(CLOCK_MONOTONIC, &now);
+        timeout_ms = (deadline->tv_sec - now.tv_sec) * 1000 + (deadline->tv_nsec - now.tv_nsec) / 1000000;
+        if (timeout_ms <= 0)
+            return KEY_TIMEOUT;
+
+        ret = poll(&pfd, 1, timeout_ms);
+        if (ret < 0 && errno == EINTR && !stop_requested)
+            continue;
+        if (ret <= 0)
+            return KEY_TIMEOUT;
+        return read(STDIN_FILENO, &key, 1) == 1 ? key : KEY_EOF;
+    }
+}
+
+// Apply a key press to what is displayed. Returns false if the user asked to quit.
+static bool handle_key(int key) {
+    if (key == 'q' || key == 'Q')
+        return false;
+    if (key == 'c')
+        display.compact = !display.compact;
+    for (int v = 0; v < VIEW_COUNT; v++)
+        if (key == view_defs[v].hotkey)
+            display.views ^= 1u << v;
+    return true;
+}
+
 void start_pm_monitor(unsigned int force, int repeating, const struct output_ops* ops) {
     unsigned char *pm_buf;
     pm_table pmt;
     system_info sysinfo;
+    bool interactive, have_sample;
 
     if (!smu_pm_tables_supported(&obj)) {
         fprintf(stderr, "PM Tables are not supported on this platform.\n");
@@ -189,16 +256,51 @@ void start_pm_monitor(unsigned int force, int repeating, const struct output_ops
         default:            sysinfo.if_ver =  0; break;
     }
 
+    interactive = repeating && isatty(STDIN_FILENO) && isatty(STDOUT_FILENO);
+    if (interactive)
+        terminal_setup();
+
     ops->init(repeating, isatty(fileno(stdout)));
 
     do {
-        if (smu_read_pm_table(&obj, pm_buf, obj.pm_table_size) == SMU_Return_OK)
+        struct timespec deadline;
+
+        have_sample = smu_read_pm_table(&obj, pm_buf, obj.pm_table_size) == SMU_Return_OK;
+        if (have_sample)
             emit_sample(&pmt, &sysinfo, ops);
 
-        nanosleep(&update_time_s, NULL);
-    } while (repeating && !stop_requested);
+        if (!repeating)
+            break;
+
+        if (!terminal_raw) {
+            nanosleep(&update_time_s, NULL);
+            continue;
+        }
+
+        // Until the next update, redraw the last sample on every key press.
+        clock_gettime(CLOCK_MONOTONIC, &deadline);
+        deadline.tv_sec += update_time_s.tv_sec + (deadline.tv_nsec + update_time_s.tv_nsec) / 1000000000;
+        deadline.tv_nsec = (deadline.tv_nsec + update_time_s.tv_nsec) % 1000000000;
+        while (!stop_requested) {
+            int key = wait_for_key(&deadline);
+
+            if (key == KEY_TIMEOUT)
+                break;
+            if (key == KEY_EOF) {
+                terminal_restore();
+                break;
+            }
+            if (!handle_key(key)) {
+                stop_requested = 1;
+                break;
+            }
+            if (have_sample)
+                emit_sample(&pmt, &sysinfo, ops);
+        }
+    } while (!stop_requested);
 
     ops->cleanup();
+    terminal_restore();
 }
 
 void read_from_dumpfile(char *dumpfile, unsigned int version, const struct output_ops* ops) {
@@ -267,7 +369,10 @@ void show_help(char* program) {
             "\t-o, --format=<format>     - Output format (boxdrawing, json, ndjson)\n"
             "\t-1, --once                - Print once and exit\n"
             "\t    --view=<view>[,...]   - Show only these views (info, cores, stats, electrical, memory, gfx, power, all)\n"
-            "\t-c, --compact             - Leave out details.\n",
+            "\t-c, --compact             - Leave out details.\n"
+            "\n"
+        "Keys in the interactive monitor:\n"
+            "\tq - quit, c - compact mode, i/k/s/e/m/g/p - info/cores/stats/electrical/memory/gfx/power view\n",
         program
     );
 }

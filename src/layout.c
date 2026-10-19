@@ -144,13 +144,13 @@ const struct group_def group_defs[GROUP_COUNT] = {
 #define GROUP(g) (1u << (g))
 
 const struct view_def view_defs[VIEW_COUNT] = {
-    [VIEW_INFO]       = { "info", GROUP(GROUP_SYSINFO) },
-    [VIEW_CORES]      = { "cores", GROUP(GROUP_CORES) },
-    [VIEW_STATS]      = { "stats", GROUP(GROUP_CORE_STATS_CALC) | GROUP(GROUP_CORE_STATS_SMU) },
-    [VIEW_ELECTRICAL] = { "electrical", GROUP(GROUP_LIMITS) },
-    [VIEW_MEMORY]     = { "memory", GROUP(GROUP_MEMORY) },
-    [VIEW_GFX]        = { "gfx", GROUP(GROUP_GRAPHICS) },
-    [VIEW_POWER]      = { "power", GROUP(GROUP_POWER) | GROUP(GROUP_POWER_REPORTS) },
+    [VIEW_INFO]       = { "info", 'i', GROUP(GROUP_SYSINFO) },
+    [VIEW_CORES]      = { "cores", 'k', GROUP(GROUP_CORES) },
+    [VIEW_STATS]      = { "stats", 's', GROUP(GROUP_CORE_STATS_CALC) | GROUP(GROUP_CORE_STATS_SMU) },
+    [VIEW_ELECTRICAL] = { "electrical", 'e', GROUP(GROUP_LIMITS) },
+    [VIEW_MEMORY]     = { "memory", 'm', GROUP(GROUP_MEMORY) },
+    [VIEW_GFX]        = { "gfx", 'g', GROUP(GROUP_GRAPHICS) },
+    [VIEW_POWER]      = { "power", 'p', GROUP(GROUP_POWER) | GROUP(GROUP_POWER_REPORTS) },
 };
 
 bool parse_views(const char *list, unsigned int *views) {
