@@ -142,16 +142,16 @@ static const struct row summary_rows[] = {
 #define ROWS(r) r, ARRAY_SIZE(r)
 
 const struct group_def group_defs[GROUP_COUNT] = {
-    [GROUP_SYSINFO]         = { "sysinfo", NULL, 0 },
-    [GROUP_CORES]           = { "cores", NULL, 0 },
-    [GROUP_CORE_STATS_CALC] = { "core_stats_calc", ROWS(core_stats_calc_rows) },
-    [GROUP_CORE_STATS_SMU]  = { "core_stats_reports", ROWS(core_stats_smu_rows) },
-    [GROUP_LIMITS]          = { "limits", ROWS(limits_rows) },
-    [GROUP_MEMORY]          = { "memory", ROWS(memory_rows) },
-    [GROUP_GRAPHICS]        = { "graphics", ROWS(graphics_rows) },
-    [GROUP_POWER]           = { "power", ROWS(power_rows) },
-    [GROUP_POWER_REPORTS]   = { "power_reports", ROWS(power_reports_rows) },
-    [GROUP_SUMMARY]         = { "summary", ROWS(summary_rows) },
+    [GROUP_SYSINFO]         = { "sysinfo", "System Information", NULL, 0 },
+    [GROUP_CORES]           = { "cores", "Cores", NULL, 0 },
+    [GROUP_CORE_STATS_CALC] = { "core_stats_calc", "Core Statistics (Calculated)", ROWS(core_stats_calc_rows) },
+    [GROUP_CORE_STATS_SMU]  = { "core_stats_reports", "Core Statistics (Reported by SMU)", ROWS(core_stats_smu_rows) },
+    [GROUP_LIMITS]          = { "limits", "Electrical & Thermal Constraints", ROWS(limits_rows) },
+    [GROUP_MEMORY]          = { "memory", "Memory Interface", ROWS(memory_rows) },
+    [GROUP_GRAPHICS]        = { "graphics", "Graphics Subsystem", ROWS(graphics_rows) },
+    [GROUP_POWER]           = { "power", "Power Consumption", ROWS(power_rows) },
+    [GROUP_POWER_REPORTS]   = { "power_reports", "Power Consumption (Additional Reports)", ROWS(power_reports_rows) },
+    [GROUP_SUMMARY]         = { "summary", "Summary", ROWS(summary_rows) },
 };
 
 #define GROUP(g) (1u << (g))

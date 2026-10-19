@@ -63,6 +63,7 @@ struct row {
 
 struct group_def {
     const char *key;
+    const char *title;
     const struct row *rows;     // NULL for groups with their own layout (sysinfo, cores)
     int nrows;
 };
@@ -122,5 +123,9 @@ extern const struct output_ops ndjson_ops;
 extern const struct output_ops text_ops;
 extern const struct output_ops influx_ops;
 extern const struct output_ops prometheus_ops;
+extern const struct output_ops netdata_ops;
+
+// The collection interval that Netdata charts are declared with.
+void netdata_set_update_every(int seconds);
 
 #endif
