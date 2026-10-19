@@ -19,6 +19,7 @@ SRC = \
       json_ops.c \
       text_ops.c \
       influx_ops.c \
+      prometheus_ops.c \
       # EOL
 OBJ = $(SRC:.c=.o)
 

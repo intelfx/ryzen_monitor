@@ -121,5 +121,6 @@ extern const struct output_ops json_ops;
 extern const struct output_ops ndjson_ops;
 extern const struct output_ops text_ops;
 extern const struct output_ops influx_ops;
+extern const struct output_ops prometheus_ops;
 
 #endif

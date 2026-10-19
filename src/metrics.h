@@ -169,6 +169,7 @@ struct sample {
     struct timespec realtime;
 
     const system_info *sysinfo;
+    unsigned int pm_table_version;
     int zen_version;
     bool experimental;
     bool has_graphics;

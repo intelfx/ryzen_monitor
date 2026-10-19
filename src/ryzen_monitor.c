@@ -421,7 +421,7 @@ void show_help(char* program) {
             "\t-u, --update=<seconds>    - Update the monitoring only after this number of second(s) have passed. Defaults to 1.\n"
             "\t-f, --forcetable=<hex>    - Force to use a specific PM table version.\n"
             "\t-t, --dumpfile=<filename> - Test mode. Read PM Table from raw-dumfile. Use in conjunction with -f\n"
-            "\t-o, --format=<format>     - Output format (boxdrawing, text, json, ndjson, influx)\n"
+            "\t-o, --format=<format>     - Output format (boxdrawing, text, json, ndjson, influx, prometheus)\n"
             "\t-1, --once                - Print once and exit\n"
             "\t    --view=<view>[,...]   - Show only these views (info, cores, stats, electrical, memory, gfx, power, summary, all)\n"
             "\t-c, --compact             - Leave out details.\n"
@@ -522,6 +522,8 @@ int main(int argc, char** argv) {
                     ops = &text_ops;
                 else if (!strcmp(optarg, "influx"))
                     ops = &influx_ops;
+                else if (!strcmp(optarg, "prometheus"))
+                    ops = &prometheus_ops;
                 else {
                     show_help(argv[0]);
                     exit(0);

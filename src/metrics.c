@@ -153,6 +153,7 @@ void compute_sample(const pm_table *pmt, const system_info *sysinfo,
     clock_gettime(CLOCK_REALTIME, &s->realtime);
 
     s->sysinfo = sysinfo;
+    s->pm_table_version = pmt->version;
     s->zen_version = pmt->zen_version;
     s->experimental = pmt->experimental;
     s->has_graphics = pmt->has_graphics;
