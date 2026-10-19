@@ -57,6 +57,7 @@ struct row {
     int n;
     enum metric_id m[3];
     bool blank_before;
+    bool detail;        // hidden in compact mode
 };
 
 struct group_def {
@@ -94,6 +95,7 @@ extern const struct view_def view_defs[VIEW_COUNT];
 // What the user asked to see.
 struct display {
     unsigned int views;         // bit per enum view
+    bool compact;               // leave out details (rows marked as such, system information)
 };
 
 // Parse a comma-separated list of view names into a view mask; returns false on unknown names.

@@ -268,7 +268,8 @@ void show_help(char* program) {
             "\t-t, --dumpfile=<filename> - Test mode. Read PM Table from raw-dumfile. Use in conjunction with -f\n"
             "\t-o, --format=<format>     - Output format (boxdrawing, json, ndjson)\n"
             "\t-1, --once                - Print once and exit\n"
-            "\t    --view=<view>[,...]   - Show only these views (info, cores, stats, electrical, memory, gfx, power, all)\n",
+            "\t    --view=<view>[,...]   - Show only these views (info, cores, stats, electrical, memory, gfx, power, all)\n"
+            "\t-c, --compact             - Leave out details.\n",
         program
     );
 }
@@ -311,10 +312,11 @@ int main(int argc, char** argv) {
         { "format",     required_argument, NULL, 'o' },
         { "once",       no_argument,       NULL, '1' },
         { "view",       required_argument, NULL, OPT_VIEW },
+        { "compact",    no_argument,       NULL, 'c' },
         { 0 }
     };
 
-    while ((c = getopt_long(argc, argv, "vmd::f:t:u:o:1h", long_options, NULL)) != -1) {
+    while ((c = getopt_long(argc, argv, "vmd::f:t:u:o:1ch", long_options, NULL)) != -1) {
         switch (c) {
             case 'v':
                 print_version();
@@ -356,6 +358,9 @@ int main(int argc, char** argv) {
                 break;
             case '1':
                 repeating = 0;
+                break;
+            case 'c':
+                display.compact = true;
                 break;
             case OPT_VIEW:
                 if (!parse_views(optarg, &display.views)) {
