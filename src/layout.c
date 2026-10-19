@@ -18,6 +18,9 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  **/
 
+#include <stdlib.h>
+#include <string.h>
+
 #include "output_ops.h"
 
 #define ARRAY_SIZE(a) ((int)(sizeof(a) / sizeof((a)[0])))
@@ -130,7 +133,53 @@ const struct group_def group_defs[GROUP_COUNT] = {
     [GROUP_POWER_REPORTS]   = { "power_reports", ROWS(power_reports_rows) },
 };
 
-bool group_shown(const struct sample *s, enum group group) {
+#define GROUP(g) (1u << (g))
+
+const struct view_def view_defs[VIEW_COUNT] = {
+    [VIEW_INFO]       = { "info", GROUP(GROUP_SYSINFO) },
+    [VIEW_CORES]      = { "cores", GROUP(GROUP_CORES) },
+    [VIEW_STATS]      = { "stats", GROUP(GROUP_CORE_STATS_CALC) | GROUP(GROUP_CORE_STATS_SMU) },
+    [VIEW_ELECTRICAL] = { "electrical", GROUP(GROUP_LIMITS) },
+    [VIEW_MEMORY]     = { "memory", GROUP(GROUP_MEMORY) },
+    [VIEW_GFX]        = { "gfx", GROUP(GROUP_GRAPHICS) },
+    [VIEW_POWER]      = { "power", GROUP(GROUP_POWER) | GROUP(GROUP_POWER_REPORTS) },
+};
+
+bool parse_views(const char *list, unsigned int *views) {
+    char *copy = strdup(list), *save = NULL;
+    bool ok = true;
+
+    *views = 0;
+    for (char *name = strtok_r(copy, ",", &save); name; name = strtok_r(NULL, ",", &save)) {
+        int v;
+
+        if (!strcmp(name, "all")) {
+            *views |= VIEWS_ALL;
+            continue;
+        }
+        for (v = 0; v < VIEW_COUNT; v++)
+            if (!strcmp(name, view_defs[v].key))
+                break;
+        if (v == VIEW_COUNT) {
+            ok = false;
+            break;
+        }
+        *views |= 1u << v;
+    }
+
+    free(copy);
+    return ok;
+}
+
+bool group_shown(const struct sample *s, const struct display *d, enum group group) {
+    unsigned int groups = 0;
+
+    for (int v = 0; v < VIEW_COUNT; v++)
+        if (d->views & (1u << v))
+            groups |= view_defs[v].groups;
+    if (!(groups & GROUP(group)))
+        return false;
+
     switch (group) {
         case GROUP_SYSINFO:  return s->sysinfo->available;
         case GROUP_GRAPHICS: return s->has_graphics;
@@ -138,6 +187,7 @@ bool group_shown(const struct sample *s, enum group group) {
     }
 }
 
-bool row_shown(const struct sample *s, const struct row *row) {
+bool row_shown(const struct sample *s, const struct display *d, const struct row *row) {
+    (void)d;
     return metric_present(s, row->m[0], 0);
 }

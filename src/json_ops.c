@@ -170,7 +170,7 @@ static void print_row(int *n, const struct sample *s, const struct row *row) {
     }
 }
 
-static void json_print(const struct sample *s) {
+static void json_print(const struct sample *s, const struct display *d) {
     int top = 0;
 
     fputc('{', stdout);
@@ -185,7 +185,7 @@ static void json_print(const struct sample *s) {
         const struct group_def *group = &group_defs[g];
         int n = 0;
 
-        if (!group_shown(s, g))
+        if (!group_shown(s, d, g))
             continue;
 
         print_key(&top, group->key);
@@ -201,7 +201,7 @@ static void json_print(const struct sample *s) {
             print_sysinfo(s);
         else
             for (int r = 0; r < group->nrows; r++)
-                if (row_shown(s, &group->rows[r]))
+                if (row_shown(s, d, &group->rows[r]))
                     print_row(&n, s, &group->rows[r]);
         fputc('}', stdout);
     }
@@ -209,13 +209,13 @@ static void json_print(const struct sample *s) {
     fputc('}', stdout);
 }
 
-static void json_emit(const struct sample *s) {
-    json_print(s);
+static void json_emit(const struct sample *s, const struct display *d) {
+    json_print(s, d);
     fflush(stdout);
 }
 
-static void ndjson_emit(const struct sample *s) {
-    json_print(s);
+static void ndjson_emit(const struct sample *s, const struct display *d) {
+    json_print(s, d);
     fputc('\n', stdout);
     fflush(stdout);
 }

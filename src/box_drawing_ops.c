@@ -205,7 +205,7 @@ static void print_row(const struct sample *s, const struct row *row) {
     }
 }
 
-static void box_drawing_emit(const struct sample *s) {
+static void box_drawing_emit(const struct sample *s, const struct display *d) {
     if (use_control_codes)
         fprintf(stdout, "\e[1;1H\e[2J"); //Move cursor to (1,1); Clear entire screen
 
@@ -215,7 +215,7 @@ static void box_drawing_emit(const struct sample *s) {
     for (int g = 0; g < GROUP_COUNT; g++) {
         const struct group_def *group = &group_defs[g];
 
-        if (!group_shown(s, g))
+        if (!group_shown(s, d, g))
             continue;
 
         fprintf(stdout, "%s", group_begin_strings[g]);
@@ -225,7 +225,7 @@ static void box_drawing_emit(const struct sample *s) {
             print_cores(s);
         else
             for (int r = 0; r < group->nrows; r++)
-                if (row_shown(s, &group->rows[r]))
+                if (row_shown(s, d, &group->rows[r]))
                     print_row(s, &group->rows[r]);
         fprintf(stdout, "%s", group_end_strings[g]);
     }

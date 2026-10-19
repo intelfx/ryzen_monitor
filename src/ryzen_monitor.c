@@ -46,6 +46,7 @@
 smu_obj_t obj;
 static struct timespec update_time_s = {1, 0};
 static int show_disabled_cores = 0;
+static struct display display = { .views = VIEWS_ALL };
 
 //Helper to access the PM Table elements. If an element doesn't exist in the
 //current PM Table version, it's pointer is set to 0. This helper returns
@@ -59,7 +60,7 @@ static void emit_sample(const pm_table *pmt, const system_info *sysinfo, const s
     struct sample sample;
 
     compute_sample(pmt, sysinfo, &opts, &sample);
-    ops->emit(&sample);
+    ops->emit(&sample, &display);
 }
 
 int select_pm_table_version(unsigned int version, pm_table *pmt, unsigned char *pm_buf) {
@@ -266,7 +267,8 @@ void show_help(char* program) {
             "\t-f, --forcetable=<hex>    - Force to use a specific PM table version.\n"
             "\t-t, --dumpfile=<filename> - Test mode. Read PM Table from raw-dumfile. Use in conjunction with -f\n"
             "\t-o, --format=<format>     - Output format (boxdrawing, json, ndjson)\n"
-            "\t-1, --once                - Print once and exit\n",
+            "\t-1, --once                - Print once and exit\n"
+            "\t    --view=<view>[,...]   - Show only these views (info, cores, stats, electrical, memory, gfx, power, all)\n",
         program
     );
 }
@@ -297,6 +299,7 @@ int main(int argc, char** argv) {
     }
 
     //Parse arguments
+    enum { OPT_VIEW = 0x100 };
     static const struct option long_options[] = {
         { "help",       no_argument,       NULL, 'h' },
         { "version",    no_argument,       NULL, 'v' },
@@ -307,6 +310,7 @@ int main(int argc, char** argv) {
         { "dumpfile",   required_argument, NULL, 't' },
         { "format",     required_argument, NULL, 'o' },
         { "once",       no_argument,       NULL, '1' },
+        { "view",       required_argument, NULL, OPT_VIEW },
         { 0 }
     };
 
@@ -352,6 +356,12 @@ int main(int argc, char** argv) {
                 break;
             case '1':
                 repeating = 0;
+                break;
+            case OPT_VIEW:
+                if (!parse_views(optarg, &display.views)) {
+                    fprintf(stderr, "Unknown view in \"%s\".\n", optarg);
+                    exit(-1);
+                }
                 break;
             case 'u':
                 update_time_s = parse_fractional_time(optarg);

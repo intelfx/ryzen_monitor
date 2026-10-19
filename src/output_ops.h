@@ -67,15 +67,47 @@ struct group_def {
 
 extern const struct group_def group_defs[GROUP_COUNT];
 
-// Whether a group has anything to show in this sample.
-bool group_shown(const struct sample *s, enum group group);
+/**
+ * Views are the units the user selects: each shows one or more groups.
+ **/
+
+enum view {
+    VIEW_INFO,
+    VIEW_CORES,
+    VIEW_STATS,
+    VIEW_ELECTRICAL,
+    VIEW_MEMORY,
+    VIEW_GFX,
+    VIEW_POWER,
+    VIEW_COUNT,
+};
+
+struct view_def {
+    const char *key;
+    unsigned int groups;        // bit per enum group
+};
+
+extern const struct view_def view_defs[VIEW_COUNT];
+
+#define VIEWS_ALL ((1u << VIEW_COUNT) - 1)
+
+// What the user asked to see.
+struct display {
+    unsigned int views;         // bit per enum view
+};
+
+// Parse a comma-separated list of view names into a view mask; returns false on unknown names.
+bool parse_views(const char *list, unsigned int *views);
+
+// Whether a group is selected and has anything to show in this sample.
+bool group_shown(const struct sample *s, const struct display *d, enum group group);
 // Whether a row has anything to show in this sample.
-bool row_shown(const struct sample *s, const struct row *row);
+bool row_shown(const struct sample *s, const struct display *d, const struct row *row);
 
 struct output_ops {
     void (*init)(bool repeating, bool interactive);
     void (*cleanup)(void);
-    void (*emit)(const struct sample *s);
+    void (*emit)(const struct sample *s, const struct display *d);
 };
 
 extern const struct output_ops box_drawing_ops;
