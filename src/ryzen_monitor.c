@@ -355,6 +355,38 @@ void start_pm_monitor(unsigned int force, int repeating, const struct output_ops
     export_cleanup();
 }
 
+// Save the current PM table to path, with the table version prepended to the file name.
+static void write_dumpfile(const char *path) {
+    const char *base = strrchr(path, '/');
+    int dirlen = base ? base - path + 1 : 0;
+    unsigned char *pm_buf;
+    char *name;
+    FILE *fd;
+
+    if (!smu_pm_tables_supported(&obj)) {
+        fprintf(stderr, "PM Tables are not supported on this platform.\n");
+        exit(-1);
+    }
+
+    pm_buf = calloc(obj.pm_table_size, sizeof(unsigned char));
+    if (!pm_buf || smu_read_pm_table(&obj, pm_buf, obj.pm_table_size) != SMU_Return_OK) {
+        fprintf(stderr, "Could not read the PM Table.\n");
+        exit(-1);
+    }
+
+    if (asprintf(&name, "%.*s%X_%s", dirlen, path, obj.pm_table_version, path + dirlen) < 0)
+        exit(-1);
+    fd = fopen(name, "wb");
+    if (!fd || fwrite(pm_buf, 1, obj.pm_table_size, fd) != obj.pm_table_size || fclose(fd) != 0) {
+        fprintf(stderr, "Could not write the dumpfile (\"%s\").\n", name);
+        exit(-1);
+    }
+    fprintf(stdout, "Written %u bytes in dumpfile (\"%s\").\n", obj.pm_table_size, name);
+
+    free(name);
+    free(pm_buf);
+}
+
 void read_from_dumpfile(char *dumpfile, unsigned int version, const struct output_ops* ops) {
     unsigned char readbuf[10240];
     unsigned int bytes_read;
@@ -421,6 +453,7 @@ void show_help(char* program) {
             "\t-u, --update=<seconds>    - Update the monitoring only after this number of second(s) have passed. Defaults to 1.\n"
             "\t-f, --forcetable=<hex>    - Force to use a specific PM table version.\n"
             "\t-t, --dumpfile=<filename> - Test mode. Read PM Table from raw-dumfile. Use in conjunction with -f\n"
+            "\t-w, --writedump=<file>    - Save the PM Table to <file>, with the table version prepended to the name.\n"
             "\t-o, --format=<format>     - Output format (boxdrawing, text, json, ndjson, influx, prometheus, netdata)\n"
             "\t-1, --once                - Print once and exit\n"
             "\t    --view=<view>[,...]   - Show only these views (info, cores, stats, electrical, memory, gfx, power, summary, all)\n"
@@ -450,7 +483,7 @@ struct timespec parse_fractional_time(const char* s) {
 int main(int argc, char** argv) {
     smu_return_val ret;
     int c=0, force=0, core=0, printtimings=0, repeating=1;
-    char *dumpfile=0;
+    char *dumpfile=0, *writedump=0;
     const struct output_ops* ops = &box_drawing_ops;
     bool format_set = false;
 
@@ -474,6 +507,7 @@ int main(int argc, char** argv) {
         { "update",     required_argument, NULL, 'u' },
         { "forcetable", required_argument, NULL, 'f' },
         { "dumpfile",   required_argument, NULL, 't' },
+        { "writedump",  required_argument, NULL, 'w' },
         { "format",     required_argument, NULL, 'o' },
         { "once",       no_argument,       NULL, '1' },
         { "view",       required_argument, NULL, OPT_VIEW },
@@ -483,7 +517,7 @@ int main(int argc, char** argv) {
         { 0 }
     };
 
-    while ((c = getopt_long(argc, argv, "vmd::f:t:u:o:1ce:h", long_options, NULL)) != -1) {
+    while ((c = getopt_long(argc, argv, "vmd::f:t:w:u:o:1ce:h", long_options, NULL)) != -1) {
         switch (c) {
             case 'v':
                 print_version();
@@ -541,6 +575,10 @@ int main(int argc, char** argv) {
             case 'e':
                 export_path = optarg;
                 break;
+            case 'w':
+                writedump = optarg;
+                break;
+
             case OPT_TEST_EXPORT:
                 ops = &influx_ops;
                 format_set = true;
@@ -587,7 +625,8 @@ int main(int argc, char** argv) {
             exit(-2);
         }
 
-        if(printtimings) print_memory_timings();
+        if (writedump) write_dumpfile(writedump);
+        else if (printtimings) print_memory_timings();
         else start_pm_monitor(force, repeating, ops);
     }
 
