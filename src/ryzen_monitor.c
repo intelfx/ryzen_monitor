@@ -152,45 +152,45 @@ void draw_screen(pm_table *pmt, system_info *sysinfo, const struct output_ops *o
 
     ops->begin_group(GROUP_CORE_STATS_SMU);
     //SOCKET_POWER reported in GROUP_POWER
-    ops->datum_float(DATUM_PEAK_CORE_VOLTAGE_SMU, pmta(CPU_TELEMETRY_VOLTAGE), UNIT_VOLTS);
-    ops->datum_float(DATUM_PACKAGE_C6_SMU, pmta(PC6)/100.f, UNIT_RATIO);
+    if (pmt->CPU_TELEMETRY_VOLTAGE) ops->datum_float(DATUM_PEAK_CORE_VOLTAGE_SMU, pmta(CPU_TELEMETRY_VOLTAGE), UNIT_VOLTS);
+    if (pmt->PC6) ops->datum_float(DATUM_PACKAGE_C6_SMU, pmta(PC6)/100.f, UNIT_RATIO);
     ops->end_group(GROUP_CORE_STATS_SMU);
 
     ops->begin_group(GROUP_LIMITS);
-    ops->datum_float(DATUM_PEAK_TEMP, pmta(PEAK_TEMP), UNIT_CELSIUS);
+    if (pmt->PEAK_TEMP) ops->datum_float(DATUM_PEAK_TEMP, pmta(PEAK_TEMP), UNIT_CELSIUS);
     if (pmt->SOC_TEMP) ops->datum_float(DATUM_SOC_TEMP, pmta(SOC_TEMP), UNIT_CELSIUS);
     if (pmt->GFX_TEMP) ops->datum_float(DATUM_GFX_TEMP, pmta(GFX_TEMP), UNIT_CELSIUS);
 
     edc_value = pmta(EDC_VALUE) * (total_usage / sysinfo->cores / 100);
     if (edc_value < pmta(TDC_VALUE)) edc_value = pmta(TDC_VALUE);
 
-    ops->datum_limit(DATUM_CORE_VRM_VOLTAGE_LIMIT, pmta(VID_VALUE), pmta(VID_LIMIT), UNIT_VOLTS);
+    if (pmt->VID_VALUE) ops->datum_limit(DATUM_CORE_VRM_VOLTAGE_LIMIT, pmta(VID_VALUE), pmta(VID_LIMIT), UNIT_VOLTS);
     //STAPM_VALUE / STAPM_LIMIT not reported with no explanation
-    ops->datum_limit(DATUM_PPT_LIMIT, pmta(PPT_VALUE), pmta(PPT_LIMIT), UNIT_WATTS);
+    if (pmt->PPT_VALUE) ops->datum_limit(DATUM_PPT_LIMIT, pmta(PPT_VALUE), pmta(PPT_LIMIT), UNIT_WATTS);
     if (pmt->PPT_VALUE_APU) ops->datum_limit(DATUM_PPT_APU_LIMIT, pmta(PPT_VALUE_APU), pmta(PPT_LIMIT_APU), UNIT_WATTS);
-    ops->datum_limit(DATUM_TDC_LIMIT_NOMINAL, pmta(TDC_VALUE), pmta(TDC_LIMIT), UNIT_AMPS);
+    if (pmt->TDC_VALUE) ops->datum_limit(DATUM_TDC_LIMIT_NOMINAL, pmta(TDC_VALUE), pmta(TDC_LIMIT), UNIT_AMPS);
     if (pmt->TDC_ACTUAL) ops->datum_limit(DATUM_TDC_LIMIT_ACTUAL, pmta(TDC_ACTUAL), pmta(TDC_LIMIT), UNIT_AMPS);
     if (pmt->TDC_VALUE_SOC) ops->datum_limit(DATUM_TDC_SOC_LIMIT_NOMINAL, pmta(TDC_VALUE_SOC), pmta(TDC_LIMIT_SOC), UNIT_AMPS);
-    ops->datum_limit(DATUM_EDC_LIMIT, edc_value, pmta(EDC_LIMIT), UNIT_AMPS);
+    if (pmt->EDC_VALUE) ops->datum_limit(DATUM_EDC_LIMIT, edc_value, pmta(EDC_LIMIT), UNIT_AMPS);
     if (pmt->EDC_VALUE_SOC) ops->datum_limit(DATUM_EDC_SOC_LIMIT, pmta(EDC_VALUE_SOC), pmta(EDC_LIMIT_SOC), UNIT_AMPS);
-    ops->datum_limit(DATUM_THM_LIMIT, pmta(THM_VALUE), pmta(THM_LIMIT), UNIT_CELSIUS);
+    if (pmt->THM_VALUE) ops->datum_limit(DATUM_THM_LIMIT, pmta(THM_VALUE), pmta(THM_LIMIT), UNIT_CELSIUS);
     if (pmt->THM_VALUE_SOC) ops->datum_limit(DATUM_THM_SOC_LIMIT, pmta(THM_VALUE_SOC), pmta(THM_LIMIT_SOC), UNIT_CELSIUS);
     if (pmt->THM_VALUE_GFX) ops->datum_limit(DATUM_THM_GFX_LIMIT, pmta(THM_VALUE_GFX), pmta(THM_LIMIT_GFX), UNIT_CELSIUS);
     // STT_VALUE_APU / STT_LIMIT_APU always zero
     // STT_VALUE_DGPU / STT_LIMIT_DGPU always zero
-    ops->datum_limit(DATUM_FIT_LIMIT, pmta(FIT_VALUE), pmta(FIT_LIMIT), UNIT_COUNT);
+    if (pmt->FIT_VALUE) ops->datum_limit(DATUM_FIT_LIMIT, pmta(FIT_VALUE), pmta(FIT_LIMIT), UNIT_COUNT);
     ops->end_group(GROUP_LIMITS);
 
     ops->begin_group(GROUP_MEMORY);
-    ops->datum_bool(DATUM_MEMORY_COUPLED, pmta(UCLK_FREQ) == pmta(MEMCLK_FREQ));
-    ops->datum_float(DATUM_FCLK_AVG, pmta(FCLK_FREQ_EFF), UNIT_MEGAHERTZ);
-    ops->datum_float(DATUM_FCLK, pmta(FCLK_FREQ), UNIT_MEGAHERTZ);
-    ops->datum_float(DATUM_UCLK, pmta(UCLK_FREQ), UNIT_MEGAHERTZ);
-    ops->datum_float(DATUM_MCLK, pmta(MEMCLK_FREQ), UNIT_MEGAHERTZ);
+    if (pmt->UCLK_FREQ && pmt->MEMCLK_FREQ) ops->datum_bool(DATUM_MEMORY_COUPLED, pmta(UCLK_FREQ) == pmta(MEMCLK_FREQ));
+    if (pmt->FCLK_FREQ_EFF) ops->datum_float(DATUM_FCLK_AVG, pmta(FCLK_FREQ_EFF), UNIT_MEGAHERTZ);
+    if (pmt->FCLK_FREQ) ops->datum_float(DATUM_FCLK, pmta(FCLK_FREQ), UNIT_MEGAHERTZ);
+    if (pmt->UCLK_FREQ) ops->datum_float(DATUM_UCLK, pmta(UCLK_FREQ), UNIT_MEGAHERTZ);
+    if (pmt->MEMCLK_FREQ) ops->datum_float(DATUM_MCLK, pmta(MEMCLK_FREQ), UNIT_MEGAHERTZ);
     // VDDIO_MEM_POWER reported in GROUP_POWER
     // SOC_SET_VOLTAGE might be the default voltage, not the actually set one
-    ops->datum_float(DATUM_VDDM, pmta(V_VDDM), UNIT_VOLTS);
-    ops->datum_float(DATUM_VDDP, pmta(V_VDDP), UNIT_VOLTS);
+    if (pmt->V_VDDM) ops->datum_float(DATUM_VDDM, pmta(V_VDDM), UNIT_VOLTS);
+    if (pmt->V_VDDP) ops->datum_float(DATUM_VDDP, pmta(V_VDDP), UNIT_VOLTS);
     if (pmt->V_VDDG) ops->datum_float(DATUM_VDDG, pmta(V_VDDG), UNIT_VOLTS);
     if (pmt->V_VDDG_IOD) ops->datum_float(DATUM_VDDG_IOD, pmta(V_VDDG_IOD), UNIT_VOLTS);
     if (pmt->V_VDDG_CCD) ops->datum_float(DATUM_VDDG_CCD, pmta(V_VDDG_CCD), UNIT_VOLTS);
@@ -198,13 +198,13 @@ void draw_screen(pm_table *pmt, system_info *sysinfo, const struct output_ops *o
 
     if (pmt->has_graphics) {
         ops->begin_group(GROUP_GRAPHICS);
-        ops->datum_float2(DATUM_GFX_VOLTAGE_ROC_POWER, pmta(GFX_VOLTAGE), UNIT_VOLTS, pmta(ROC_POWER), UNIT_WATTS);
-        ops->datum_float(DATUM_GFX_TEMP, pmta(GFX_TEMP), UNIT_CELSIUS);
-        ops->datum_float2(DATUM_GFX_FREQ_REAL_EFF, pmta(GFX_FREQ), UNIT_MEGAHERTZ, pmta(GFX_FREQEFF), UNIT_MEGAHERTZ);
-        ops->datum_float(DATUM_GFX_BUSY, pmta(GFX_BUSY), UNIT_RATIO);
-        ops->datum_float2(DATUM_GFX_EDC_LIMIT_RESIDENCY, pmta(GFX_EDC_LIM), UNIT_AMPS, pmta(GFX_EDC_RESIDENCY), UNIT_RATIO);
-        ops->datum_float2(DATUM_GFX_DISPLAY_COUNT_FPS, pmta(DISPLAY_COUNT), UNIT_COUNT, pmta(FPS), UNIT_COUNT);
-        ops->datum_float3(DATUM_GFX_DGPU_POWER_FREQ_TARGET_BUSY, pmta(DGPU_POWER), UNIT_WATTS, pmta(DGPU_FREQ_TARGET), UNIT_MEGAHERTZ, pmta(DGPU_GFX_BUSY), UNIT_RATIO);
+        if (pmt->GFX_VOLTAGE) ops->datum_float2(DATUM_GFX_VOLTAGE_ROC_POWER, pmta(GFX_VOLTAGE), UNIT_VOLTS, pmta(ROC_POWER), UNIT_WATTS);
+        if (pmt->GFX_TEMP) ops->datum_float(DATUM_GFX_TEMP, pmta(GFX_TEMP), UNIT_CELSIUS);
+        if (pmt->GFX_FREQ) ops->datum_float2(DATUM_GFX_FREQ_REAL_EFF, pmta(GFX_FREQ), UNIT_MEGAHERTZ, pmta(GFX_FREQEFF), UNIT_MEGAHERTZ);
+        if (pmt->GFX_BUSY) ops->datum_float(DATUM_GFX_BUSY, pmta(GFX_BUSY), UNIT_RATIO);
+        if (pmt->GFX_EDC_LIM) ops->datum_float2(DATUM_GFX_EDC_LIMIT_RESIDENCY, pmta(GFX_EDC_LIM), UNIT_AMPS, pmta(GFX_EDC_RESIDENCY), UNIT_RATIO);
+        if (pmt->DISPLAY_COUNT) ops->datum_float2(DATUM_GFX_DISPLAY_COUNT_FPS, pmta(DISPLAY_COUNT), UNIT_COUNT, pmta(FPS), UNIT_COUNT);
+        if (pmt->DGPU_POWER) ops->datum_float3(DATUM_GFX_DGPU_POWER_FREQ_TARGET_BUSY, pmta(DGPU_POWER), UNIT_WATTS, pmta(DGPU_FREQ_TARGET), UNIT_MEGAHERTZ, pmta(DGPU_GFX_BUSY), UNIT_RATIO);
         ops->end_group(GROUP_GRAPHICS);
     }
 
@@ -214,7 +214,7 @@ void draw_screen(pm_table *pmt, system_info *sysinfo, const struct output_ops *o
     // VDDCR_CPU_POWER doesn't correlate with what the cores report, nor with
     // what is actually consumed, but is the value HWiNFO shows.  It is
     // reported in GROUP_POWER_REPORTS.
-    ops->datum_float(DATUM_VDDR_SOC_POWER, pmta(VDDCR_SOC_POWER), UNIT_WATTS);
+    if (pmt->VDDCR_SOC_POWER) ops->datum_float(DATUM_VDDR_SOC_POWER, pmta(VDDCR_SOC_POWER), UNIT_WATTS);
     if (pmt->IO_VDDCR_SOC_POWER) ops->datum_float(DATUM_IO_VDDR_SOC_POWER, pmta(IO_VDDCR_SOC_POWER), UNIT_WATTS);
     if (pmt->GMI2_VDDG_POWER) ops->datum_float(DATUM_GMI2_VDDG_POWER, pmta(GMI2_VDDG_POWER), UNIT_WATTS);
     if (pmt->ROC_POWER) ops->datum_float(DATUM_ROC_POWER, pmta(ROC_POWER), UNIT_WATTS);
@@ -226,15 +226,15 @@ void draw_screen(pm_table *pmt, system_info *sysinfo, const struct output_ops *o
         l3_logic_power += pmta0(L3_LOGIC_POWER[i]);
         l3_vddm_power += pmta0(L3_VDDM_POWER[i]);
     }
-    ops->datum_sum(DATUM_L3_LOGIC_POWER, pmt->L3_LOGIC_POWER[0], pmt->L3_LOGIC_POWER[0] + pmt->max_l3, UNIT_WATTS);
-    ops->datum_sum(DATUM_L3_VDDM_POWER, pmt->L3_VDDM_POWER[0], pmt->L3_VDDM_POWER[0] + pmt->max_l3, UNIT_WATTS);
+    if (pmt->max_l3 && pmt->L3_LOGIC_POWER[0]) ops->datum_sum(DATUM_L3_LOGIC_POWER, pmt->L3_LOGIC_POWER[0], pmt->L3_LOGIC_POWER[0] + pmt->max_l3, UNIT_WATTS);
+    if (pmt->max_l3 && pmt->L3_VDDM_POWER[0]) ops->datum_sum(DATUM_L3_VDDM_POWER, pmt->L3_VDDM_POWER[0], pmt->L3_VDDM_POWER[0] + pmt->max_l3, UNIT_WATTS);
 
     //These powers are supplied by other power lines to the CPU and are drawn from the 24 pin ATX connector on most boards
-    ops->datum_float(DATUM_VDDIO_MEM_POWER, pmta(VDDIO_MEM_POWER), UNIT_WATTS);
-    ops->datum_float(DATUM_IOD_VDDIO_MEM_POWER, pmta(IOD_VDDIO_MEM_POWER), UNIT_WATTS);
+    if (pmt->VDDIO_MEM_POWER) ops->datum_float(DATUM_VDDIO_MEM_POWER, pmta(VDDIO_MEM_POWER), UNIT_WATTS);
+    if (pmt->IOD_VDDIO_MEM_POWER) ops->datum_float(DATUM_IOD_VDDIO_MEM_POWER, pmta(IOD_VDDIO_MEM_POWER), UNIT_WATTS);
     if (pmt->DDR_VDDP_POWER) ops->datum_float(DATUM_DDR_VDDP_POWER, pmta(DDR_VDDP_POWER), UNIT_WATTS);
     if (pmt->DDR_PHY_POWER) ops->datum_float(DATUM_DDR_PHY_POWER, pmta(DDR_PHY_POWER), UNIT_WATTS);
-    ops->datum_float(DATUM_VDD18_POWER, pmta(VDD18_POWER), UNIT_WATTS); //Same as pmta(IO_VDD18_POWER)
+    if (pmt->VDD18_POWER) ops->datum_float(DATUM_VDD18_POWER, pmta(VDD18_POWER), UNIT_WATTS); //Same as pmta(IO_VDD18_POWER)
     if (pmt->IO_DISPLAY_POWER) ops->datum_float(DATUM_IO_DISPLAY_POWER, pmta(IO_DISPLAY_POWER), UNIT_WATTS);
     if (pmt->IO_USB_POWER) ops->datum_float(DATUM_IO_USB_POWER, pmta(IO_USB_POWER), UNIT_WATTS);
 
@@ -248,10 +248,10 @@ void draw_screen(pm_table *pmt, system_info *sysinfo, const struct output_ops *o
 
     ops->begin_group(GROUP_POWER_REPORTS);
     //ROC_POWER reported in GROUP_GRAPHICS and GROUP_POWER
-    ops->datum_float3(DATUM_SVI2_SOC_POWER, pmta(SOC_TELEMETRY_VOLTAGE), UNIT_VOLTS, pmta(SOC_TELEMETRY_CURRENT), UNIT_AMPS, pmta(SOC_TELEMETRY_POWER), UNIT_WATTS);
-    ops->datum_float3(DATUM_SVI2_CORE_POWER, pmta(CPU_TELEMETRY_VOLTAGE), UNIT_VOLTS, pmta(CPU_TELEMETRY_CURRENT), UNIT_AMPS, pmta(CPU_TELEMETRY_POWER), UNIT_WATTS);
-    ops->datum_float(DATUM_SMU_CORE_POWER, pmta(VDDCR_CPU_POWER), UNIT_WATTS);
-    ops->datum_float(DATUM_SMU_SOCKET_POWER, pmta(SOCKET_POWER), UNIT_WATTS);
+    if (pmt->SOC_TELEMETRY_VOLTAGE) ops->datum_float3(DATUM_SVI2_SOC_POWER, pmta(SOC_TELEMETRY_VOLTAGE), UNIT_VOLTS, pmta(SOC_TELEMETRY_CURRENT), UNIT_AMPS, pmta(SOC_TELEMETRY_POWER), UNIT_WATTS);
+    if (pmt->CPU_TELEMETRY_VOLTAGE) ops->datum_float3(DATUM_SVI2_CORE_POWER, pmta(CPU_TELEMETRY_VOLTAGE), UNIT_VOLTS, pmta(CPU_TELEMETRY_CURRENT), UNIT_AMPS, pmta(CPU_TELEMETRY_POWER), UNIT_WATTS);
+    if (pmt->VDDCR_CPU_POWER) ops->datum_float(DATUM_SMU_CORE_POWER, pmta(VDDCR_CPU_POWER), UNIT_WATTS);
+    if (pmt->SOCKET_POWER) ops->datum_float(DATUM_SMU_SOCKET_POWER, pmta(SOCKET_POWER), UNIT_WATTS);
     if (pmt->PACKAGE_POWER) ops->datum_float(DATUM_SMU_PACKAGE_POWER, pmta(PACKAGE_POWER), UNIT_WATTS);
     ops->end_group(GROUP_POWER_REPORTS);
 
