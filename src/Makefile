@@ -18,6 +18,7 @@ SRC = \
       box_drawing_ops.c \
       json_ops.c \
       text_ops.c \
+      influx_ops.c \
       # EOL
 OBJ = $(SRC:.c=.o)
 
