@@ -25,6 +25,7 @@
 #include <math.h>
 #include <sched.h>
 #include <fcntl.h>
+#include <getopt.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
@@ -257,15 +258,15 @@ void show_help(char* program) {
         "Usage: %s <option(s)>\n\n"
 
         "Options:\n"
-            "\t-h            - Show this help screen.\n"
-            "\t-v            - Show program version.\n"
-            "\t-m            - Print DRAM Timings and exit.\n"
-            "\t-d            - Show disabled cores.\n"
-            "\t-u<seconds>   - Update the monitoring only after this number of second(s) have passed. Defaults to 1.\n"
-            "\t-f<hex-value> - Force to use a specific PM table version.\n"
-            "\t-t<filename>  - Test mode. Read PM Table from raw-dumfile. Use in conjunction with -f\n"
-            "\t-o<format>    - Output format (boxdrawing, json, ndjson)\n"
-            "\t-1            - Print once and exit\n",
+            "\t-h, --help                - Show this help screen.\n"
+            "\t-v, --version             - Show program version.\n"
+            "\t-m, --timings             - Print DRAM Timings and exit.\n"
+            "\t-d, --disabled            - Show disabled cores.\n"
+            "\t-u, --update=<seconds>    - Update the monitoring only after this number of second(s) have passed. Defaults to 1.\n"
+            "\t-f, --forcetable=<hex>    - Force to use a specific PM table version.\n"
+            "\t-t, --dumpfile=<filename> - Test mode. Read PM Table from raw-dumfile. Use in conjunction with -f\n"
+            "\t-o, --format=<format>     - Output format (boxdrawing, json, ndjson)\n"
+            "\t-1, --once                - Print once and exit\n",
         program
     );
 }
@@ -296,7 +297,20 @@ int main(int argc, char** argv) {
     }
 
     //Parse arguments
-    while ((c = getopt(argc, argv, "vmd::f:t:u:o:1h")) != -1) {
+    static const struct option long_options[] = {
+        { "help",       no_argument,       NULL, 'h' },
+        { "version",    no_argument,       NULL, 'v' },
+        { "timings",    no_argument,       NULL, 'm' },
+        { "disabled",   optional_argument, NULL, 'd' },
+        { "update",     required_argument, NULL, 'u' },
+        { "forcetable", required_argument, NULL, 'f' },
+        { "dumpfile",   required_argument, NULL, 't' },
+        { "format",     required_argument, NULL, 'o' },
+        { "once",       no_argument,       NULL, '1' },
+        { 0 }
+    };
+
+    while ((c = getopt_long(argc, argv, "vmd::f:t:u:o:1h", long_options, NULL)) != -1) {
         switch (c) {
             case 'v':
                 print_version();
