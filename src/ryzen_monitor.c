@@ -115,27 +115,29 @@ static void emit_sample(const pm_table *pmt, const system_info *sysinfo, const s
     }
 }
 
-void disabled_cores_0x400005(pm_table *pmt, system_info *sysinfo) {
-    int i, mask;
-    float power, voltage, fit, iddmax, freq, freqeff, c0, cc1, irm;
-    for (i = 0; i < 8; i++) {
-        power = pmta(CORE_POWER[i]);
-        voltage = pmta(CORE_VOLTAGE[i]);
-        fit = pmta(CORE_FIT[i]);
-        iddmax = pmta(CORE_IDDMAX[i]);
-        freq = pmta(CORE_FREQ[i]);
-        freqeff = pmta(CORE_FREQEFF[i]);
-        c0 = pmta(CORE_C0[i]);
-        cc1 = pmta(CORE_CC1[i]);
-        irm = pmta(CORE_IRM[i]);
-        
-        if (power == 0 && voltage == 0 && fit == 0 && iddmax == 0 && freq == 0 && freqeff == 0 && c0 == 0 && cc1 == 0 && irm == 0 ) {
-            mask = 1 << i;
-        } else {
-            mask = 0 << i;
+// Cores whose per-core values are all zero are disabled. Returns a bit per core slot.
+static unsigned int disabled_cores_from_pmt(const pm_table *pmt) {
+    unsigned int map = 0;
+
+    for (int i = 0; i < pmt->max_cores; i++) {
+        float *fields[] = {
+            pmt->CORE_POWER[i], pmt->CORE_VOLTAGE[i], pmt->CORE_FIT[i], pmt->CORE_IDDMAX[i], pmt->CORE_FREQ[i],
+            pmt->CORE_FREQEFF[i], pmt->CORE_C0[i], pmt->CORE_CC1[i], pmt->CORE_IRM[i],
+        };
+        bool any = false, zero = true;
+
+        for (size_t j = 0; j < sizeof(fields) / sizeof(fields[0]); j++) {
+            if (!fields[j])
+                continue;
+            any = true;
+            if (*fields[j] != 0)
+                zero = false;
         }
-        sysinfo->core_disable_map_pmt = sysinfo->core_disable_map_pmt | mask;
+        if (any && zero)
+            map |= 1u << i;
     }
+
+    return map;
 }
 
 static sig_atomic_t stop_requested = 0;
@@ -256,6 +258,7 @@ void start_pm_monitor(unsigned int force, int repeating, const struct output_ops
         fprintf(stderr, "Selected PM Table is larger than the PM Table returned by the SMU.\n");
         exit(0);
     }
+    memset(&sysinfo, 0, sizeof(sysinfo));
     //Maximum core count. Just to be safe. Will be overwritten by get_processor_topology(...).
     sysinfo.enabled_cores_count = pmt.max_cores;
 
@@ -263,13 +266,10 @@ void start_pm_monitor(unsigned int force, int repeating, const struct output_ops
     sysinfo.codename    = smu_codename_to_str(&obj);
     sysinfo.smu_fw_ver  = smu_get_fw_version(&obj);
 
-    //PMT hack for Cezanne's core_disabled_map 
-    if (obj.pm_table_version == 0x400005) {
-        if (smu_read_pm_table(&obj, pm_buf, obj.pm_table_size) == SMU_Return_OK) {
-            disabled_cores_0x400005(&pmt, &sysinfo);
-        }
-    }
-    
+    // For processors whose core fuses are not known
+    if (smu_read_pm_table(&obj, pm_buf, obj.pm_table_size) == SMU_Return_OK)
+        sysinfo.core_disable_map_pmt = disabled_cores_from_pmt(&pmt);
+
     get_processor_topology(&sysinfo, pmt.zen_version);
 
     switch (obj.smu_if_version) {
@@ -412,11 +412,11 @@ void read_from_dumpfile(char *dumpfile, unsigned int version, const struct outpu
         fprintf(stderr, "Read %d bytes from \"%s\", but the selected PM Table is %d bytes long.\n", bytes_read, dumpfile, pmt.min_size);
         exit(0);
     }
-    
-    sysinfo.available=0; //Did not read sysinfo
-    sysinfo.enabled_cores_count = pmt.max_cores;
-    sysinfo.core_disable_map=0;
-    sysinfo.cores=sysinfo.enabled_cores_count;
+
+    memset(&sysinfo, 0, sizeof(sysinfo)); //Did not read sysinfo
+    sysinfo.core_disable_map = disabled_cores_from_pmt(&pmt);
+    sysinfo.cores = pmt.max_cores - count_set_bits(sysinfo.core_disable_map);
+    sysinfo.enabled_cores_count = sysinfo.cores;
 
     if (export_path)
         export_setup();
