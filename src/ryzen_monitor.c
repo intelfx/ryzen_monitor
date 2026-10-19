@@ -117,7 +117,7 @@ void draw_screen(pm_table *pmt, system_info *sysinfo, const struct output_ops *o
 
         // AMD denotes a sleeping core as having spent less than 6% of the time in C0.
         // Source: Ryzen Master
-        _Bool core_sleeping = pmta(CORE_C0[i]) <= 6.f;
+        _Bool core_sleeping = pmta(CORE_C0[i]) < 6.f;
 
         if (show_disabled_cores || !core_disabled)
             ops->core(core_number, core_disabled, core_sleeping, core_frequency,
