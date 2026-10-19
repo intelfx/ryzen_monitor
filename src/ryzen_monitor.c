@@ -222,6 +222,7 @@ void start_pm_monitor(unsigned int force, int repeating, const struct output_ops
     pm_table pmt;
     system_info sysinfo;
     bool interactive, have_sample;
+    unsigned int version;
 
     if (!smu_pm_tables_supported(&obj)) {
         fprintf(stderr, "PM Tables are not supported on this platform.\n");
@@ -239,8 +240,13 @@ void start_pm_monitor(unsigned int force, int repeating, const struct output_ops
     }
 
     //Select matching PM Table
-    if(!select_pm_table_version(force?force:obj.pm_table_version, &pmt, pm_buf)) {
-        fprintf(stderr, "This PM Table version (0x%x) is currently not supported.\n", force?force:obj.pm_table_version);
+    version = force ? force : pm_table_lookup_version(obj.pm_table_version, obj.codename);
+    if(!select_pm_table_version(version, &pmt, pm_buf)) {
+        unsigned int similar = pm_table_similar_version(version);
+
+        fprintf(stderr, "This PM Table version (0x%x) is currently not supported.\n", version);
+        if (similar)
+            fprintf(stderr, "Version 0x%x is a revision of the same table; -f 0x%x might work, but the values can be wrong.\n", similar, similar);
         fprintf(stderr, "Processor name: %s\n", get_processor_name());
         fprintf(stderr, "SMU FW version: %s\n", smu_get_fw_version(&obj));
         exit(0);
@@ -392,7 +398,11 @@ void read_from_dumpfile(char *dumpfile, unsigned int version, const struct outpu
 
     //Select matching PM Table
     if(!select_pm_table_version(version, &pmt, readbuf)) {
+        unsigned int similar = pm_table_similar_version(version);
+
         fprintf(stderr, "This PM Table version (0x%x) is currently not supported.\n", version);
+        if (similar)
+            fprintf(stderr, "Version 0x%x is a revision of the same table; -f 0x%x might work, but the values can be wrong.\n", similar, similar);
         exit(0);
     }
     else fprintf(stderr, "Using PM Table version 0x%x.\n", version);

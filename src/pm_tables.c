@@ -21,6 +21,7 @@
 #include <string.h>
 
 #include "pm_tables.h"
+#include "smu_common.h"
 
 /**
  * Every known PM Table version and the function that maps it.
@@ -71,4 +72,25 @@ int select_pm_table_version(unsigned int version, pm_table *pmt, unsigned char *
     if (pmt->VDD18_POWER == NULL) pmt->VDD18_POWER = pmt->IO_VDD18_POWER;
 
     return 1;
+}
+
+unsigned int pm_table_lookup_version(unsigned int version, int codename) {
+    if (!version && codename == CODENAME_PINNACLERIDGE)
+        return 0x100100;
+    return version;
+}
+
+unsigned int pm_table_similar_version(unsigned int version) {
+    unsigned int best = 0;
+
+    // Versions that differ only in the lowest byte are revisions of one table.
+    for (size_t i = 0; i < sizeof(pm_table_versions) / sizeof(pm_table_versions[0]); i++) {
+        unsigned int v = pm_table_versions[i].version;
+
+        if ((v & ~0xffu) != (version & ~0xffu) || v == version)
+            continue;
+        if (!best || (v > version ? v - version : version - v) < (best > version ? best - version : version - best))
+            best = v;
+    }
+    return best;
 }

@@ -389,4 +389,11 @@ void pm_table_0x620205(pm_table *pmt, void* base_addr); //Granite Ridge: Zen5, 1
 // Map pm_buf as PM Table version into pmt. Returns 0 if the version is unknown.
 int select_pm_table_version(unsigned int version, pm_table *pmt, unsigned char *pm_buf);
 
+// The version to look the table up by: the one the SMU reports, or a made-up
+// one for processors whose table has no version.
+unsigned int pm_table_lookup_version(unsigned int version, int codename);
+
+// A known revision of the same table as version, or 0.
+unsigned int pm_table_similar_version(unsigned int version);
+
 #endif
