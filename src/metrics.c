@@ -229,15 +229,25 @@ void compute_sample(const pm_table *pmt, const system_info *sysinfo,
         }
     }
 
-    set(s, M_PEAK_CORE_FREQUENCY, 0, peak_core_frequency);
-    set(s, M_PEAK_CORE_TEMPERATURE, 0, peak_core_temp);
-    set(s, M_PEAK_CORE_VOLTAGE, 0, peak_core_voltage);
-    set(s, M_AVERAGE_CORE_VOLTAGE, 0, total_core_voltage / sysinfo->enabled_cores_count);
-    set(s, M_AVERAGE_CORE_CC6, 0, (total_core_CC6 / sysinfo->enabled_cores_count) / 100.f);
-    set(s, M_TOTAL_CORE_POWER, 0, total_core_power);
-    set(s, M_AVERAGE_CORE_TEMPERATURE, 0, total_core_temp / sysinfo->enabled_cores_count);
-    set(s, M_AVERAGE_CORE_FREQUENCY, 0, total_core_frequency / sysinfo->enabled_cores_count);
-    set(s, M_AVERAGE_CORE_C0, 0, (total_usage / sysinfo->enabled_cores_count) / 100.f);
+    // Statistics only exist where the per-core values they are made of do.
+    if (s->m[M_CORE_FREQUENCY].present) {
+        set(s, M_PEAK_CORE_FREQUENCY, 0, peak_core_frequency);
+        set(s, M_AVERAGE_CORE_FREQUENCY, 0, total_core_frequency / sysinfo->enabled_cores_count);
+    }
+    if (s->m[M_CORE_TEMPERATURE].present) {
+        set(s, M_PEAK_CORE_TEMPERATURE, 0, peak_core_temp);
+        set(s, M_AVERAGE_CORE_TEMPERATURE, 0, total_core_temp / sysinfo->enabled_cores_count);
+    }
+    if (s->m[M_CORE_VOLTAGE].present) {
+        set(s, M_PEAK_CORE_VOLTAGE, 0, peak_core_voltage);
+        set(s, M_AVERAGE_CORE_VOLTAGE, 0, total_core_voltage / sysinfo->enabled_cores_count);
+    }
+    if (s->m[M_CORE_CC6].present)
+        set(s, M_AVERAGE_CORE_CC6, 0, (total_core_CC6 / sysinfo->enabled_cores_count) / 100.f);
+    if (s->m[M_CORE_POWER].present)
+        set(s, M_TOTAL_CORE_POWER, 0, total_core_power);
+    if (s->m[M_CORE_C0].present)
+        set(s, M_AVERAGE_CORE_C0, 0, (total_usage / sysinfo->enabled_cores_count) / 100.f);
     if (pmt->PC6) set(s, M_PACKAGE_CC6, 0, pmta(PC6) / 100.f);
 
     // Electrical and thermal constraints
