@@ -395,9 +395,12 @@ int main(int argc, char** argv) {
     char *dumpfile=0;
     const struct output_ops* ops = &box_drawing_ops;
 
-    //Set up signal handlers
-    if ((signal(SIGTERM, signal_interrupt) == SIG_ERR) ||
-        (signal(SIGINT, signal_interrupt) == SIG_ERR)) {
+    //Set up signal handlers. Without SA_RESTART, so that blocking calls return
+    //and the main loop notices the request to stop.
+    struct sigaction sa = { .sa_handler = signal_interrupt };
+    sigemptyset(&sa.sa_mask);
+    if (sigaction(SIGTERM, &sa, NULL) != 0 ||
+        sigaction(SIGINT, &sa, NULL) != 0) {
         fprintf(stderr, "Can't set up signal hooks.\n");
         exit(-1);
     }
