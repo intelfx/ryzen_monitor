@@ -381,6 +381,8 @@ void pm_table_0x240803(pm_table *pmt, void* base_addr); //3950X: Zen2, 16 cores,
 void pm_table_0x370003(pm_table *pmt, void* base_addr); //Zen2, 8 cores, GPU, version 3; Lucienne, Renoir
 void pm_table_0x370005(pm_table *pmt, void* base_addr); //Zen2, 8 cores, GPU, version 5; Lucienne, Renoir
 void pm_table_0x1E0004(pm_table *pmt, void* base_addr); //Zen+, 4 cores, GPU, version 4; Picasso
+void pm_table_0x540004(pm_table *pmt, void* base_addr); //Raphael: Zen4, 16 cores, 2-CCD (7950X, 7900X, etc.)
+void pm_table_0x540104(pm_table *pmt, void* base_addr); //Raphael: Zen4,  8 cores, 1-CCD (7800X3D, 7700X, 7600X, etc.)
 
 // Map pm_buf as PM Table version into pmt. Returns 0 if the version is unknown.
 int select_pm_table_version(unsigned int version, pm_table *pmt, unsigned char *pm_buf);

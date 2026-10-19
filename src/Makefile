@@ -15,6 +15,7 @@ SRC = \
       pm_tables_zen1.c \
       pm_tables_zen2.c \
       pm_tables_zen3.c \
+      pm_tables_zen4.c \
       readinfo.c \
       metrics.c \
       layout.c \
