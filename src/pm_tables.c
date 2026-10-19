@@ -42,6 +42,7 @@ static const struct {
     { 0x1E0004, pm_table_0x1E0004 }, //Picasso
     { 0x540004, pm_table_0x540004 }, //Raphael, 2 CCDs
     { 0x540104, pm_table_0x540104 }, //Raphael, 1 CCD
+    { 0x620205, pm_table_0x620205 }, //Granite Ridge, 2 CCDs
 };
 
 int select_pm_table_version(unsigned int version, pm_table *pmt, unsigned char *pm_buf) {
