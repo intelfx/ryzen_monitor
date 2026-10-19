@@ -189,9 +189,14 @@ void compute_sample(const pm_table *pmt, const system_info *sysinfo,
 
         core_frequency = pmta(CORE_FREQEFF[i]) * 1000.f;
 
-        // Rumours say this is how AMD calculates core voltage
-        core_sleep_time = pmta(CORE_CC6[i]) / 100.f;
-        core_voltage = ((1.0 - core_sleep_time) * average_voltage) + (0.2 * core_sleep_time);
+        if (pmt->CPU_TELEMETRY_VOLTAGE) {
+            // Rumours say this is how AMD calculates core voltage
+            core_sleep_time = pmta(CORE_CC6[i]) / 100.f;
+            core_voltage = ((1.0 - core_sleep_time) * average_voltage) + (0.2 * core_sleep_time);
+        } else {
+            // Without the package voltage, use the core's own.
+            core_voltage = pmta(CORE_VOLTAGE[i]);
+        }
 
         // Per-core values are kept even when absent: the core table prints a full row.
         s->m[M_CORE_FREQUENCY].value[i] = core_frequency;
@@ -203,7 +208,8 @@ void compute_sample(const pm_table *pmt, const system_info *sysinfo,
         s->m[M_CORE_CC6].value[i] = pmta(CORE_CC6[i]) / 100.f;
         if (pmt->CORE_FREQEFF[i]) s->m[M_CORE_FREQUENCY].present |= 1u << i;
         if (pmt->CORE_POWER[i]) s->m[M_CORE_POWER].present |= 1u << i;
-        if (pmt->CPU_TELEMETRY_VOLTAGE && pmt->CORE_CC6[i]) s->m[M_CORE_VOLTAGE].present |= 1u << i;
+        if (pmt->CPU_TELEMETRY_VOLTAGE ? pmt->CORE_CC6[i] != NULL : pmt->CORE_VOLTAGE[i] != NULL)
+            s->m[M_CORE_VOLTAGE].present |= 1u << i;
         if (pmt->CORE_TEMP[i]) s->m[M_CORE_TEMPERATURE].present |= 1u << i;
         if (pmt->CORE_C0[i]) s->m[M_CORE_C0].present |= 1u << i;
         if (pmt->CORE_CC1[i]) s->m[M_CORE_CC1].present |= 1u << i;
