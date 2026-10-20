@@ -43,6 +43,7 @@
 #include "pm_tables.h"
 #include "metrics.h"
 #include "output_ops.h"
+#include "controls.h"
 
 #define PROGRAM_VERSION "1.0.6"
 
@@ -454,12 +455,43 @@ void read_from_dumpfile(char *dumpfile, unsigned int version, const struct outpu
         print_table_elements(readbuf, bytes_read);
 }
 
+// Run the --get-* and --set-* options.
+static void run_controls(unsigned int force) {
+    unsigned char *pm_buf = NULL;
+    pm_table pmt;
+    system_info sysinfo;
+
+    memset(&pmt, 0, sizeof(pmt));
+    memset(&sysinfo, 0, sizeof(sysinfo));
+
+    // The current limits are read from the PM table, if there is a known one.
+    if (smu_pm_tables_supported(&obj)) {
+        unsigned int version = force ? force : pm_table_lookup_version(obj.pm_table_version, obj.codename);
+
+        pm_buf = calloc(obj.pm_table_size, sizeof(unsigned char));
+        if (pm_buf && select_pm_table_version(version, &pmt, pm_buf) && obj.pm_table_size >= pmt.min_size)
+            smu_read_pm_table(&obj, pm_buf, obj.pm_table_size);
+        else
+            memset(&pmt, 0, sizeof(pmt));
+    }
+
+    controls_run(&pmt, pm_buf, &sysinfo);
+    free(pm_buf);
+}
+
 void print_version() {
     fprintf(stdout, "Ryzen Monitor " PROGRAM_VERSION "\n");
     exit(0);
 }
 
+static void show_help_options(char* program);
+
 void show_help(char* program) {
+    show_help_options(program);
+    controls_print_help();
+}
+
+static void show_help_options(char* program) {
     fprintf(stdout,
         "Ryzen Monitor " PROGRAM_VERSION "\n\n"
 
@@ -524,7 +556,7 @@ int main(int argc, char** argv) {
 
     //Parse arguments
     enum { OPT_VIEW = 0x100, OPT_TEST_EXPORT, OPT_DUMPTABLE, OPT_INIT_DEBUG };
-    static const struct option long_options[] = {
+    static struct option long_options[64] = {
         { "help",       no_argument,       NULL, 'h' },
         { "version",    no_argument,       NULL, 'v' },
         { "timings",    no_argument,       NULL, 'm' },
@@ -542,8 +574,13 @@ int main(int argc, char** argv) {
         { "compact",    no_argument,       NULL, 'c' },
         { "export",     required_argument, NULL, 'e' },
         { "test-export", no_argument,      NULL, OPT_TEST_EXPORT },
-        { 0 }
     };
+    int nlong = 0;
+
+    while (long_options[nlong].name)
+        nlong++;
+    controls_options(long_options, &nlong);
+    long_options[nlong] = (struct option){ 0 };
 
     while ((c = getopt_long(argc, argv, "vmd::f:t:w:u:o:1ce:b:h", long_options, NULL)) != -1) {
         switch (c) {
@@ -638,6 +675,7 @@ int main(int argc, char** argv) {
             case '?':
                 exit(0);
             default:
+                controls_handle_option(c, optarg);
                 break;
         }
     }
@@ -665,7 +703,8 @@ int main(int argc, char** argv) {
             exit(-2);
         }
 
-        if (writedump) write_dumpfile(writedump);
+        if (controls_requested()) run_controls(force);
+        else if (writedump) write_dumpfile(writedump);
         else if (printtimings) print_memory_timings();
         else start_pm_monitor(force, repeating, ops);
     }

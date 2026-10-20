@@ -26,6 +26,9 @@ SRC = \
       influx_ops.c \
       prometheus_ops.c \
       netdata_ops.c \
+      smu_messages.c \
+      smu_control.c \
+      controls.c \
       # EOL
 OBJ = $(SRC:.c=.o)
 
