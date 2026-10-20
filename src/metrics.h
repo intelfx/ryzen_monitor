@@ -183,6 +183,9 @@ struct sample {
 
 struct sample_options {
     bool show_disabled_cores;
+    // The SMU reports clocks against a nominal 100 MHz reference clock; on a
+    // system whose reference clock runs elsewhere they are scaled by refclk/100.
+    double refclk_mhz;
 };
 
 void compute_sample(const pm_table *pmt, const system_info *sysinfo,

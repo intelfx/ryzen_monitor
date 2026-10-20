@@ -142,6 +142,7 @@ void compute_sample(const pm_table *pmt, const system_info *sysinfo,
     float total_core_voltage, total_core_power, total_usage, total_core_CC6;
     float total_core_temp, total_core_frequency;
     float l3_logic_power, l3_vddm_power, edc_value;
+    float clock_scale = opts->refclk_mhz > 0 ? opts->refclk_mhz / 100.0 : 1.f;
     int i, core_number;
 
     memset(s, 0, sizeof(*s));
@@ -187,7 +188,7 @@ void compute_sample(const pm_table *pmt, const system_info *sysinfo,
         //(which actually have 8 | 16 cores)
         core->number = (opts->show_disabled_cores || !core->disabled) ? core_number++ : -1;
 
-        core_frequency = pmta(CORE_FREQEFF[i]) * 1000.f;
+        core_frequency = pmta(CORE_FREQEFF[i]) * 1000.f * clock_scale;
 
         if (pmt->CPU_TELEMETRY_VOLTAGE) {
             // Rumours say this is how AMD calculates core voltage
@@ -292,10 +293,10 @@ void compute_sample(const pm_table *pmt, const system_info *sysinfo,
 
     if (pmt->UCLK_FREQ && pmt->MEMCLK_FREQ)
         set(s, M_MEMORY_COUPLED, 0, pmta(UCLK_FREQ) == pmta(MEMCLK_FREQ));
-    FIELD(M_FCLK_AVERAGE, FCLK_FREQ_EFF);
-    FIELD(M_FCLK, FCLK_FREQ);
-    FIELD(M_UCLK, UCLK_FREQ);
-    FIELD(M_MCLK, MEMCLK_FREQ);
+    if (pmt->FCLK_FREQ_EFF) set(s, M_FCLK_AVERAGE, 0, *pmt->FCLK_FREQ_EFF * clock_scale);
+    if (pmt->FCLK_FREQ) set(s, M_FCLK, 0, *pmt->FCLK_FREQ * clock_scale);
+    if (pmt->UCLK_FREQ) set(s, M_UCLK, 0, *pmt->UCLK_FREQ * clock_scale);
+    if (pmt->MEMCLK_FREQ) set(s, M_MCLK, 0, *pmt->MEMCLK_FREQ * clock_scale);
     // SOC_SET_VOLTAGE might be the default voltage, not the actually set one
     FIELD(M_CLDO_VDDM, V_VDDM);
     FIELD(M_CLDO_VDDP, V_VDDP);

@@ -24,6 +24,9 @@
 #include <cpuid.h>
 #include <ctype.h>
 #include <libsmu.h>
+#include <math.h>
+#include <time.h>
+#include <x86intrin.h>
 #include "readinfo.h"
 
 extern smu_obj_t obj;
@@ -248,6 +251,42 @@ void get_processor_topology(system_info *sysinfo, int codename) {
         sysinfo->ccxs = 1;
 
     sysinfo->available=1;
+}
+
+double detect_refclk(void) {
+    struct timespec a, b, nap = { 0, 200000000L };
+    unsigned long long t0, t1;
+    double elapsed, nominal = 0.0, ref;
+    FILE *fp;
+
+    // The invariant TSC ticks at the nominal frequency times refclk/100, and
+    // the kernel calibrates it against a timer that does not run off the
+    // reference clock. Measuring it against CLOCK_MONOTONIC and dividing by
+    // the nominal frequency ACPI declares gives the real reference clock.
+    fp = fopen("/sys/devices/system/cpu/cpu0/acpi_cppc/nominal_freq", "r");
+    if (!fp)
+        return 100.0;
+    if (fscanf(fp, "%lf", &nominal) != 1)
+        nominal = 0.0;
+    fclose(fp);
+    if (nominal < 500.0)
+        return 100.0;
+
+    clock_gettime(CLOCK_MONOTONIC, &a);
+    t0 = __rdtsc();
+    nanosleep(&nap, NULL);
+    t1 = __rdtsc();
+    clock_gettime(CLOCK_MONOTONIC, &b);
+
+    elapsed = (b.tv_sec - a.tv_sec) + (b.tv_nsec - a.tv_nsec) / 1e9;
+    if (elapsed <= 0.0)
+        return 100.0;
+    ref = (t1 - t0) / elapsed / 1e6 / nominal * 100.0;
+
+    // Implausible, or measurement noise around the stock clock
+    if (ref < 90.0 || ref > 130.0 || fabs(ref - 100.0) < 0.5)
+        return 100.0;
+    return ref;
 }
 
 void print_memory_timings() {

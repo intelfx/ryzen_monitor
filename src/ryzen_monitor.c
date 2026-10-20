@@ -59,6 +59,7 @@ static struct display display = { .views = VIEWS_DEFAULT };
 #define pmta0(elem) ((pmt->elem)?(*pmt->elem):0)
 
 static bool dump_table = false;
+static double refclk_mhz = 0;
 static bool init_debug = false;
 static const char *export_path = NULL;
 static bool export_created = false;
@@ -89,7 +90,7 @@ static void export_cleanup(void) {
 }
 
 static void emit_sample(const pm_table *pmt, const system_info *sysinfo, const struct output_ops *ops) {
-    struct sample_options opts = { .show_disabled_cores = show_disabled_cores };
+    struct sample_options opts = { .show_disabled_cores = show_disabled_cores, .refclk_mhz = refclk_mhz };
     struct sample sample;
     int fd, saved_stdout = -1;
 
@@ -288,6 +289,8 @@ void start_pm_monitor(unsigned int force, int repeating, const struct output_ops
         sysinfo.core_disable_map_pmt = disabled_cores_from_pmt(&pmt);
 
     get_processor_topology(&sysinfo, obj.codename);
+    if (!refclk_mhz)
+        refclk_mhz = detect_refclk();
 
     if (init_debug) {
         print_topology_debug(&sysinfo, &pmt);
@@ -473,6 +476,9 @@ void show_help(char* program) {
             "\t    --dumptable           - With -t, also print every element of the table.\n"
             "\t-w, --writedump=<file>    - Save the PM Table to <file>, with the table version prepended to the name.\n"
             "\t    --init-debug          - Show how the processor topology was determined and exit.\n"
+            "\t-b, --refclk=<MHz>        - Reference clock (BCLK). The SMU reports clocks against a nominal 100 MHz\n"
+            "\t                            reference; on a BCLK-overclocked system they are scaled by refclk/100.\n"
+            "\t                            Measured from the TSC by default, 100 when reading a dump file.\n"
             "\t-o, --format=<format>     - Output format (boxdrawing, text, json, ndjson, influx, prometheus, netdata)\n"
             "\t-1, --once                - Print once and exit\n"
             "\t    --view=<view>[,...]   - Show only these views (info, cores, stats, electrical, memory, gfx, power, summary, all)\n"
@@ -529,6 +535,7 @@ int main(int argc, char** argv) {
         { "dumptable",  no_argument,       NULL, OPT_DUMPTABLE },
         { "writedump",  required_argument, NULL, 'w' },
         { "init-debug", no_argument,       NULL, OPT_INIT_DEBUG },
+        { "refclk",     required_argument, NULL, 'b' },
         { "format",     required_argument, NULL, 'o' },
         { "once",       no_argument,       NULL, '1' },
         { "view",       required_argument, NULL, OPT_VIEW },
@@ -538,7 +545,7 @@ int main(int argc, char** argv) {
         { 0 }
     };
 
-    while ((c = getopt_long(argc, argv, "vmd::f:t:w:u:o:1ce:h", long_options, NULL)) != -1) {
+    while ((c = getopt_long(argc, argv, "vmd::f:t:w:u:o:1ce:b:h", long_options, NULL)) != -1) {
         switch (c) {
             case 'v':
                 print_version();
@@ -604,6 +611,13 @@ int main(int argc, char** argv) {
                 break;
             case OPT_INIT_DEBUG:
                 init_debug = true;
+                break;
+            case 'b':
+                refclk_mhz = strtod(optarg, NULL);
+                if (refclk_mhz < 90 || refclk_mhz > 130) {
+                    fprintf(stderr, "The reference clock must be between 90 and 130 MHz.\n");
+                    exit(-1);
+                }
                 break;
             case OPT_TEST_EXPORT:
                 ops = &influx_ops;

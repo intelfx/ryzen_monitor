@@ -44,6 +44,8 @@ typedef struct {
 } system_info;
 
 void print_memory_timings();
+// The reference clock (BCLK) in MHz, measured from the TSC; 100 if it can't be measured.
+double detect_refclk(void);
 void get_processor_topology(system_info *sysinfo, int codename);
 unsigned int count_set_bits(unsigned int v);
 const char* get_processor_name();
