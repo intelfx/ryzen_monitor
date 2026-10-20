@@ -270,7 +270,7 @@ void start_pm_monitor(unsigned int force, int repeating, const struct output_ops
     if (smu_read_pm_table(&obj, pm_buf, obj.pm_table_size) == SMU_Return_OK)
         sysinfo.core_disable_map_pmt = disabled_cores_from_pmt(&pmt);
 
-    get_processor_topology(&sysinfo, pmt.zen_version);
+    get_processor_topology(&sysinfo, obj.codename);
 
     switch (obj.smu_if_version) {
         case IF_VERSION_9:  sysinfo.if_ver =  9; break;

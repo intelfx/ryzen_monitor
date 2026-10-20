@@ -33,10 +33,18 @@ typedef struct {
     unsigned int core_disable_map;
     unsigned int core_disable_map_pmt;
     unsigned int enabled_cores_count;
+
+    // How the topology was determined
+    unsigned int family;
+    unsigned int model;
+    unsigned int ccd_fuses[2];
+    unsigned int core_fuse;
+    unsigned int core_fuse_values[8];
+    const char *core_map_source;
 } system_info;
 
 void print_memory_timings();
-void get_processor_topology(system_info *sysinfo, unsigned int zen_version);
+void get_processor_topology(system_info *sysinfo, int codename);
 unsigned int count_set_bits(unsigned int v);
 const char* get_processor_name();
 void append_u32_to_str(char* buffer, unsigned int val);

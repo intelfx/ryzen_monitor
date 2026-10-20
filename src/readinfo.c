@@ -82,91 +82,171 @@ unsigned int count_set_bits(unsigned int v) {
     return result;
 }
 
-void get_processor_topology(system_info *sysinfo, unsigned int zen_version) {
-    unsigned int ccds_present, ccds_down, ccd_enable_map, ccd_disable_map,
-        core_disable_map_addr, core_disable_map_tmp, logical_cores, threads_per_core,
-        fam, model, fuse1, fuse2, offs, eax, ebx, ecx, edx;
+/**
+ * Where the CCD and core disable fuses of each processor are. The addresses
+ * and layouts are those of ZenStates-Core (github.com/irusanov/ZenStates-Core),
+ * which verified most of them against real processors.
+ **/
+struct topology_fuses {
+    unsigned int ccd_fuse;              // CCD present/down fuses, two consecutive registers; 0 for a single die
+    int ccd_map_from_down;              // up to 8 CCDs: the enabled CCDs are the ones not marked down
+    unsigned int core_fuse;             // core disable fuse of the first CCD (or the die); 0 if not known
+    int core_fuse_shift;                // bit position of the core disable mask in it
+    unsigned int core_fuse_ccd_stride;  // address step between the core fuses of consecutive CCDs
+    unsigned int ccx_per_ccd;
+    unsigned int core_slots_per_ccx;
+};
+
+#define CCD_FUSE_ZEN2 0x5D218
+#define CCD_FUSE_ZEN4 (0x5D218 + 0x1A4)
+#define CCD_CORE_FUSE_STRIDE (1u << 25)
+
+static struct topology_fuses get_topology_fuses(int codename, unsigned int fam) {
+    switch (codename) {
+        // Zen / Zen+ desktop and HEDT: one die, 2 CCX of 4 cores
+        case CODENAME_SUMMITRIDGE:
+        case CODENAME_PINNACLERIDGE:
+        case CODENAME_THREADRIPPER:
+        case CODENAME_COLFAX:
+        case CODENAME_NAPLES:
+            return (struct topology_fuses){ .core_fuse = 0x5D25C, .ccx_per_ccd = 2, .core_slots_per_ccx = 4 };
+
+        // Zen 2 chiplets: 2 CCX of 4 per CCD
+        case CODENAME_MATISSE:
+        case CODENAME_CASTLEPEAK:
+            return (struct topology_fuses){
+                .ccd_fuse = CCD_FUSE_ZEN2, .ccd_map_from_down = 1,
+                .core_fuse = 0x30081A38, .core_fuse_ccd_stride = CCD_CORE_FUSE_STRIDE,
+                .ccx_per_ccd = 2, .core_slots_per_ccx = 4,
+            };
+
+        // Zen 3 chiplets: 1 CCX of 8 per CCD
+        case CODENAME_VERMEER:
+        case CODENAME_CHAGALL:
+        case CODENAME_MILAN:
+            return (struct topology_fuses){
+                .ccd_fuse = CCD_FUSE_ZEN2, .ccd_map_from_down = 1,
+                .core_fuse = 0x30081D98, .core_fuse_ccd_stride = CCD_CORE_FUSE_STRIDE,
+                .ccx_per_ccd = 1, .core_slots_per_ccx = 8,
+            };
+
+        // Zen 4 / Zen 5 desktop: up to 2 CCDs
+        case CODENAME_RAPHAEL:
+        case CODENAME_DRAGONRANGE:
+            return (struct topology_fuses){
+                .ccd_fuse = CCD_FUSE_ZEN4,
+                .core_fuse = 0x30081CD0, .core_fuse_ccd_stride = CCD_CORE_FUSE_STRIDE,
+                .ccx_per_ccd = 1, .core_slots_per_ccx = 8,
+            };
+        case CODENAME_GRANITERIDGE:
+            return (struct topology_fuses){
+                .ccd_fuse = CCD_FUSE_ZEN4,
+                .core_fuse = 0x304A03DC, .core_fuse_ccd_stride = CCD_CORE_FUSE_STRIDE,
+                .ccx_per_ccd = 1, .core_slots_per_ccx = 8,
+            };
+
+        // Monolithic APUs: one die, the core mask sits at a bit offset in an SMU fuse register
+        case CODENAME_CEZANNE:
+            return (struct topology_fuses){ .core_fuse = 0x5D448, .core_fuse_shift = 11, .ccx_per_ccd = 1, .core_slots_per_ccx = 8 };
+        case CODENAME_PHOENIX:
+        case CODENAME_HAWKPOINT:
+            return (struct topology_fuses){ .core_fuse = 0x5D528, .core_fuse_shift = 7, .ccx_per_ccd = 1, .core_slots_per_ccx = 8 };
+
+        // Monolithic APUs whose core fuse is not known
+        case CODENAME_RAVENRIDGE:
+        case CODENAME_RAVENRIDGE2:
+        case CODENAME_PICASSO:
+        case CODENAME_DALI:
+        case CODENAME_VANGOGH:
+            return (struct topology_fuses){ .ccx_per_ccd = 1, .core_slots_per_ccx = 4 };
+        case CODENAME_RENOIR:
+        case CODENAME_LUCIENNE:
+            return (struct topology_fuses){ .ccx_per_ccd = 2, .core_slots_per_ccx = 4 };
+        case CODENAME_REMBRANDT:
+            return (struct topology_fuses){ .ccx_per_ccd = 1, .core_slots_per_ccx = 8 };
+        case CODENAME_STRIXPOINT:
+            return (struct topology_fuses){ .ccx_per_ccd = 2, .core_slots_per_ccx = 4 };
+
+        // Anything else: the CCD count is not known, assume one CCX of 8 per CCD on Zen 3 and later
+        default:
+            return (struct topology_fuses){ .ccx_per_ccd = fam >= 0x19 ? 1 : 2, .core_slots_per_ccx = fam >= 0x19 ? 8 : 4 };
+    }
+}
+
+void get_processor_topology(system_info *sysinfo, int codename) {
+    struct topology_fuses fuses;
+    unsigned int eax, ebx, ecx, edx, logical_cores, threads_per_core, slots, ccd_enable_map, core_map, enabled_cores;
+    unsigned int ccds_present = 0, ccds_down = 0, value;
+    int physical, logical;
 
     __get_cpuid(0x00000001, &eax, &ebx, &ecx, &edx);
-    fam = ((eax & 0xf00) >> 8) + ((eax & 0xff00000) >> 20);
-    model = ((eax & 0xf0000) >> 12) + ((eax & 0xf0) >> 4);
+    sysinfo->family = ((eax & 0xf00) >> 8) + ((eax & 0xff00000) >> 20);
+    sysinfo->model = ((eax & 0xf0000) >> 12) + ((eax & 0xf0) >> 4);
     logical_cores = (ebx >> 16) & 0xFF;
 
     __get_cpuid(0x8000001E, &eax, &ebx, &ecx, &edx);
     threads_per_core = ((ebx >> 8) & 0xF) + 1;
+    sysinfo->cores = logical_cores / threads_per_core;
 
-    fuse1 = 0x5D218;
-    fuse2 = 0x5D21C;
-    offs = 0x238;
+    fuses = get_topology_fuses(codename, sysinfo->family);
+    slots = fuses.ccx_per_ccd * fuses.core_slots_per_ccx;
 
-    if (fam == 0x19) {
-        //fuse1 += 0x10;
-        //fuse2 += 0x10;
-        offs = 0x598;
+    // Enabled CCDs from the CCD fuses: present in [23:22] of the first register, down in [31:30] of the first
+    // and [5:0] of the second.
+    ccd_enable_map = 1;
+    if (fuses.ccd_fuse &&
+            smu_read_smn_addr(&obj, fuses.ccd_fuse, &ccds_present) == SMU_Return_OK &&
+            smu_read_smn_addr(&obj, fuses.ccd_fuse + 4, &ccds_down) == SMU_Return_OK &&
+            ccds_present != 0xFFFFFFFF) {
+        unsigned int down = ((ccds_present >> 30) & 0x3) | ((ccds_down & 0x3F) << 2);
+        unsigned int map = fuses.ccd_map_from_down ? ~down & 0xFF : ((ccds_present >> 22) & 0x3) & ~down;
+
+        sysinfo->ccd_fuses[0] = ccds_present;
+        sysinfo->ccd_fuses[1] = ccds_down;
+        if (map)
+            ccd_enable_map = map;
     }
-    else if (fam == 0x17 && model != 0x71 && model != 0x31) {
-        fuse1 += 0x40;
-        fuse2 += 0x40;
-    }
+    sysinfo->ccds = count_set_bits(ccd_enable_map);
+    sysinfo->ccxs = sysinfo->ccds * fuses.ccx_per_ccd;
 
-    if (smu_read_smn_addr(&obj, fuse1, &ccds_present) != SMU_Return_OK ||
-        smu_read_smn_addr(&obj, fuse2, &ccds_down) != SMU_Return_OK) {
-        perror("Failed to read CCD fuses");
-        exit(-1);
-    }
-
-    ccd_enable_map = (ccds_present >> 22) & 0xff;
-    ccd_disable_map = ((ccds_present >> 30) & 0x3) | ((ccds_down & 0x3f) << 2);
-
-    core_disable_map_addr = (0x30081800 + offs);
-    sysinfo->core_disable_map = 0;
-    if (ccd_enable_map & 0x01) {
-        if (smu_read_smn_addr(&obj, core_disable_map_addr, &core_disable_map_tmp) != SMU_Return_OK) {
-            perror("Failed to read disabled core fuse");
-            exit(-1);
-        }
-        sysinfo->core_disable_map |= core_disable_map_tmp & 0xff;
-    }
-    if (ccd_enable_map & 0x02) {
-        if (smu_read_smn_addr(&obj, core_disable_map_addr|0x2000000, &core_disable_map_tmp) != SMU_Return_OK) {
-            perror("Failed to read disabled core fuse");
-            exit(-1);
-        }
-        sysinfo->core_disable_map |= (core_disable_map_tmp & 0xff)<<8;
-    }
-
-
-    if (!threads_per_core)
-        sysinfo->cores = logical_cores;
-    else
-        sysinfo->cores = logical_cores / threads_per_core;
-
-    switch(zen_version)
-    {
-        case 3:
-            //Zen3 does not have CCXs anymore. They now have 8 cores per CCD
-            //each with the same access to each other and the common L3 cache.
-            if (model != 0x50) {// Exclude Cezanne
-                sysinfo->ccxs = 0;
-                sysinfo->ccds = count_set_bits(ccd_enable_map);
-                sysinfo->cores_per_ccx = 8 - count_set_bits(sysinfo->core_disable_map & 0xff);
-                sysinfo->enabled_cores_count = 8*(sysinfo->ccds) - count_set_bits(sysinfo->core_disable_map);
-
-            } else {
-                sysinfo->core_disable_map = sysinfo->core_disable_map_pmt;
-                sysinfo->ccds = 1;
-                sysinfo->cores_per_ccx = 8;
-            }
-            sysinfo->enabled_cores_count = 8*(sysinfo->ccds) - count_set_bits(sysinfo->core_disable_map);
+    // Disabled cores from the core fuse of each enabled CCD. Each CCD takes a fixed number of core slots in
+    // the PM table. The map is only used if it adds up to the number of cores CPUID reports.
+    core_map = 0;
+    enabled_cores = 0;
+    sysinfo->core_fuse = fuses.core_fuse;
+    for (physical = 0, logical = 0; fuses.core_fuse && physical < 8; physical++) {
+        if (!(ccd_enable_map & (1u << physical)))
+            continue;
+        // The map has room for 32 core slots.
+        if ((logical + 1) * slots > 32) {
+            enabled_cores = 0;
             break;
-        case 2:
-        default:
-            sysinfo->cores_per_ccx = (8 - count_set_bits(sysinfo->core_disable_map & 0xff)) / 2;
-            sysinfo->ccds = count_set_bits(ccd_enable_map);
-            sysinfo->ccxs = sysinfo->cores == sysinfo->cores_per_ccx ? 1 : sysinfo->ccds * 2;
-            sysinfo->enabled_cores_count = 8*(sysinfo->ccds) - count_set_bits(sysinfo->core_disable_map);
+        }
+        if (smu_read_smn_addr(&obj, fuses.core_fuse + fuses.core_fuse_ccd_stride * physical, &value) != SMU_Return_OK ||
+                value == 0xFFFFFFFF) {
+            enabled_cores = 0;
             break;
+        }
+        sysinfo->core_fuse_values[logical] = value;
+        value = (value >> fuses.core_fuse_shift) & ((1u << slots) - 1);
+        core_map |= value << (logical * slots);
+        enabled_cores += slots - count_set_bits(value);
+        logical++;
     }
+
+    if (enabled_cores && enabled_cores == sysinfo->cores) {
+        sysinfo->core_disable_map = core_map;
+        sysinfo->core_map_source = "fuses";
+    } else {
+        sysinfo->core_disable_map = sysinfo->core_disable_map_pmt;
+        sysinfo->core_map_source = "PM table";
+    }
+    sysinfo->enabled_cores_count = sysinfo->ccds * slots - count_set_bits(sysinfo->core_disable_map);
+    sysinfo->cores_per_ccx = (slots - count_set_bits(sysinfo->core_disable_map & ((1u << slots) - 1))) / fuses.ccx_per_ccd;
+    // Parts with all cores in one CCX, like the Ryzen 3 3300X
+    if (sysinfo->cores == sysinfo->cores_per_ccx)
+        sysinfo->ccxs = 1;
+
     sysinfo->available=1;
 }
 
