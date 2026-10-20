@@ -44,6 +44,7 @@
 #include "metrics.h"
 #include "output_ops.h"
 #include "controls.h"
+#include "smu_control.h"
 
 #define PROGRAM_VERSION "1.0.6"
 
@@ -90,8 +91,33 @@ static void export_cleanup(void) {
         unlink(export_path);
 }
 
+// Query the Curve Optimizer counts, by core slot, if they are to be shown.
+static unsigned int read_co_counts(const system_info *sysinfo, int *counts) {
+    const struct smu_settings *s = smu_settings_for(obj.codename);
+    unsigned int present = 0;
+    int core = 0;
+
+    if (!sysinfo->available || !s || !(display.views & (1u << VIEW_CO)))
+        return 0;
+
+    for (unsigned int slot = 0; slot < sysinfo->ccds * sysinfo->core_slots_per_ccd && slot < PMT_MAX_NUM_CORES; slot++) {
+        if (sysinfo->core_disable_map & (1u << slot))
+            continue;
+        if (smu_get_co(s, sysinfo, core++, &counts[slot]) != SMU_CONTROL_OK)
+            return 0;
+        present |= 1u << slot;
+    }
+    return present;
+}
+
 static void emit_sample(const pm_table *pmt, const system_info *sysinfo, const struct output_ops *ops) {
-    struct sample_options opts = { .show_disabled_cores = show_disabled_cores, .refclk_mhz = refclk_mhz };
+    int co_counts[PMT_MAX_NUM_CORES];
+    struct sample_options opts = {
+        .show_disabled_cores = show_disabled_cores,
+        .refclk_mhz = refclk_mhz,
+        .co_counts = co_counts,
+        .co_present = read_co_counts(sysinfo, co_counts),
+    };
     struct sample sample;
     int fd, saved_stdout = -1;
 
@@ -517,14 +543,14 @@ static void show_help_options(char* program) {
             "\t                            Measured from the TSC by default, 100 when reading a dump file.\n"
             "\t-o, --format=<format>     - Output format (boxdrawing, text, json, ndjson, influx, prometheus, netdata)\n"
             "\t-1, --once                - Print once and exit\n"
-            "\t    --view=<view>[,...]   - Show only these views (info, cores, stats, electrical, memory, gfx, power, summary, all)\n"
+            "\t    --view=<view>[,...]   - Show only these views (info, cores, stats, co, electrical, memory, gfx, power, summary, all)\n"
             "\t-c, --compact             - Leave out details.\n"
             "\t-e, --export=<path>       - Write every sample to this named pipe (created if needed), for telegraf.\n"
             "\t                            The format defaults to influx.\n"
             "\t    --test-export         - Same as --format=influx.\n"
             "\n"
         "Keys in the interactive monitor:\n"
-            "\tq - quit, c - compact mode, i/k/s/e/m/g/p/y - info/cores/stats/electrical/memory/gfx/power/summary view\n",
+            "\tq - quit, c - compact mode, i/k/s/o/e/m/g/p/y - info/cores/stats/co/electrical/memory/gfx/power/summary view\n",
         program
     );
 }

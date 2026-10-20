@@ -153,6 +153,8 @@ static void define_charts(const struct sample *s, const struct display *d) {
     if (group_shown(s, d, GROUP_CORES))
         for (size_t i = 0; i < sizeof(core_metrics) / sizeof(core_metrics[0]); i++)
             define_indexed(s, core_metrics[i], "cores", priority++);
+    if (group_shown(s, d, GROUP_CO))
+        define_indexed(s, M_CORE_CO, "co", priority++);
 
     for (int g = 0; g < GROUP_COUNT; g++) {
         const struct group_def *group = &group_defs[g];

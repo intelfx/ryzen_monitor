@@ -51,6 +51,7 @@ static const char* const group_begin_strings[] = {
     [GROUP_CORES] = "╭─────────┬────────────┬──────────┬─────────┬──────────┬─────────────┬─────────────┬─────────────╮\n",
     [GROUP_CORE_STATS_CALC] = "╭── Core Statistics (Calculated) ───────────────┬────────────────────────────────────────────────╮\n",
     [GROUP_CORE_STATS_SMU] = "├── Reported by SMU ────────────────────────────┼────────────────────────────────────────────────┤\n",
+    [GROUP_CO] = "╭── Curve Optimizer Counts ──────────────────────────────────────────────────────────────────────╮\n",
     [GROUP_LIMITS] = "╭── Electrical & Thermal Constraints ───────────┬────────────────────────────────────────────────╮\n",
     [GROUP_MEMORY] = "╭── Memory Interface ───────────────────────────┬────────────────────────────────────────────────╮\n",
     [GROUP_GRAPHICS] = "╭── Graphics Subsystem──────────────────────────┬────────────────────────────────────────────────╮\n",
@@ -65,6 +66,7 @@ static const char* const group_end_strings[] = {
     [GROUP_CORES] = "╰─────────┴────────────┴──────────┴─────────┴──────────┴─────────────┴─────────────┴─────────────╯\n",
     [GROUP_CORE_STATS_CALC] = "",
     [GROUP_CORE_STATS_SMU] = usual_end_string,
+    [GROUP_CO] = "╰────────────────────────────────────────────────────────────────────────────────────────────────╯\n",
     [GROUP_LIMITS] = usual_end_string,
     [GROUP_MEMORY] = usual_end_string,
     [GROUP_GRAPHICS] = usual_end_string,
@@ -127,6 +129,23 @@ static void print_cores(const struct sample *s) {
                 core_cell(c1, sizeof(c1), "%*.1f", 5, s, M_CORE_CC1, i, 100.f),
                 core_cell(c6, sizeof(c6), "%*.1f", 5, s, M_CORE_CC6, i, 100.f));
     }
+}
+
+// Eight cores to a line.
+static void print_co(const struct sample *s) {
+    int n = 0;
+
+    for (int i = 0; i < s->ncores; i++) {
+        if (s->core[i].number < 0 || !metric_present(s, M_CORE_CO, i))
+            continue;
+        if (n % 8 == 0)
+            fprintf(stdout, "│");
+        fprintf(stdout, " [C%02d: %+3.0f]", s->core[i].number, metric_value(s, M_CORE_CO, i));
+        if (++n % 8 == 0)
+            fprintf(stdout, "        │\n");
+    }
+    if (n % 8)
+        fprintf(stdout, "%*s        │\n", 11 * (8 - n % 8), "");
 }
 
 static void print_value(const char *label, enum metric_kind kind, float value, enum unit unit) {
@@ -236,6 +255,8 @@ static void box_drawing_emit(const struct sample *s, const struct display *d) {
             print_sysinfo(s);
         else if (g == GROUP_CORES)
             print_cores(s);
+        else if (g == GROUP_CO)
+            print_co(s);
         else
             for (int r = 0; r < group->nrows; r++)
                 if (row_shown(s, d, &group->rows[r]))

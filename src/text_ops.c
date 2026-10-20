@@ -135,6 +135,13 @@ static void text_emit(const struct sample *s, const struct display *d) {
             print_sysinfo(s);
         else if (g == GROUP_CORES)
             print_cores(s);
+        else if (g == GROUP_CO) {
+            fprintf(stdout, "Curve Optimizer Counts:");
+            for (int i = 0; i < s->ncores; i++)
+                if (s->core[i].number >= 0 && metric_present(s, M_CORE_CO, i))
+                    fprintf(stdout, " C%02d %+.0f", s->core[i].number, metric_value(s, M_CORE_CO, i));
+            fputc('\n', stdout);
+        }
         else
             for (int r = 0; r < group->nrows; r++)
                 if (row_shown(s, d, &group->rows[r]))

@@ -94,6 +94,7 @@ static const enum metric_id core_metrics[] = {
     M_CORE_C0,
     M_CORE_CC1,
     M_CORE_CC6,
+    M_CORE_CO,
 };
 
 static void print_cores(const struct sample *s) {
@@ -185,7 +186,8 @@ static void json_print(const struct sample *s, const struct display *d) {
         const struct group_def *group = &group_defs[g];
         int n = 0;
 
-        if (!group_shown(s, d, g))
+        // The counts are in the core objects.
+        if (!group_shown(s, d, g) || g == GROUP_CO)
             continue;
 
         print_key(&top, group->key);

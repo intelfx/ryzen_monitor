@@ -36,6 +36,7 @@ const struct metric_def metric_defs[M_COUNT] = {
     [M_CORE_C0]                   = C("core_c0", "Core C0 residency", UNIT_RATIO),
     [M_CORE_CC1]                  = C("core_cc1", "Core CC1 residency", UNIT_RATIO),
     [M_CORE_CC6]                  = C("core_cc6", "Core CC6 residency", UNIT_RATIO),
+    [M_CORE_CO]                   = C("core_curve_optimizer", "Curve Optimizer count", UNIT_COUNT),
 
     [M_PEAK_CORE_FREQUENCY]       = G("peak_core_frequency", "Highest effective core frequency", UNIT_MEGAHERTZ),
     [M_PEAK_CORE_TEMPERATURE]     = G("peak_core_temperature", "Highest core temperature", UNIT_CELSIUS),
@@ -215,6 +216,8 @@ void compute_sample(const pm_table *pmt, const system_info *sysinfo,
         if (pmt->CORE_C0[i]) s->m[M_CORE_C0].present |= 1u << i;
         if (pmt->CORE_CC1[i]) s->m[M_CORE_CC1].present |= 1u << i;
         if (pmt->CORE_CC6[i]) s->m[M_CORE_CC6].present |= 1u << i;
+        if (opts->co_present & (1u << i))
+            set(s, M_CORE_CO, i, opts->co_counts[i]);
 
         //Statistics
         if (!core->disabled) {

@@ -145,6 +145,7 @@ const struct group_def group_defs[GROUP_COUNT] = {
     [GROUP_SYSINFO]         = { "sysinfo", "System Information", NULL, 0 },
     [GROUP_CORES]           = { "cores", "Cores", NULL, 0 },
     [GROUP_CORE_STATS_CALC] = { "core_stats_calc", "Core Statistics (Calculated)", ROWS(core_stats_calc_rows) },
+    [GROUP_CO]              = { "co", "Curve Optimizer Counts", NULL, 0 },
     [GROUP_CORE_STATS_SMU]  = { "core_stats_reports", "Core Statistics (Reported by SMU)", ROWS(core_stats_smu_rows) },
     [GROUP_LIMITS]          = { "limits", "Electrical & Thermal Constraints", ROWS(limits_rows) },
     [GROUP_MEMORY]          = { "memory", "Memory Interface", ROWS(memory_rows) },
@@ -160,6 +161,7 @@ const struct view_def view_defs[VIEW_COUNT] = {
     [VIEW_INFO]       = { "info", 'i', GROUP(GROUP_SYSINFO) },
     [VIEW_CORES]      = { "cores", 'k', GROUP(GROUP_CORES) },
     [VIEW_STATS]      = { "stats", 's', GROUP(GROUP_CORE_STATS_CALC) | GROUP(GROUP_CORE_STATS_SMU) },
+    [VIEW_CO]         = { "co", 'o', GROUP(GROUP_CO) },
     [VIEW_ELECTRICAL] = { "electrical", 'e', GROUP(GROUP_LIMITS) },
     [VIEW_MEMORY]     = { "memory", 'm', GROUP(GROUP_MEMORY) },
     [VIEW_GFX]        = { "gfx", 'g', GROUP(GROUP_GRAPHICS) },
@@ -205,6 +207,7 @@ bool group_shown(const struct sample *s, const struct display *d, enum group gro
     switch (group) {
         case GROUP_SYSINFO:  return s->sysinfo->available && !d->compact;
         case GROUP_GRAPHICS: return s->has_graphics;
+        case GROUP_CO:       return s->m[M_CORE_CO].present != 0;
         default:             return true;
     }
 }

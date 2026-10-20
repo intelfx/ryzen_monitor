@@ -246,11 +246,25 @@ static void print_cores(const struct sample *s) {
     }
 }
 
+static void print_co(const struct sample *s) {
+    for (int i = 0; i < s->ncores; i++) {
+        int number = s->core[i].number, count;
+
+        if (number < 0 || !metric_present(s, M_CORE_CO, i))
+            continue;
+        count = metric_value(s, M_CORE_CO, i);
+        fprintf(stdout, MEASUREMENT ",host=%s,name=Core%d core_psmcount=%di,core%d_psmcount=%di\n",
+                hostname, number, count, number, count);
+    }
+}
+
 static void influx_emit(const struct sample *s, const struct display *d) {
     if (group_shown(s, d, GROUP_CORES))
         print_cores(s);
     if (group_shown(s, d, GROUP_CORE_STATS_CALC))
         print_line(s, "Cores", FIELDS(cores_fields));
+    if (group_shown(s, d, GROUP_CO))
+        print_co(s);
     if (group_shown(s, d, GROUP_LIMITS))
         print_line(s, "Package", FIELDS(limits_fields));
     if (group_shown(s, d, GROUP_MEMORY))

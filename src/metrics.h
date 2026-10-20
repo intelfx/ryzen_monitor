@@ -61,6 +61,7 @@ enum metric_id {
     M_CORE_C0,
     M_CORE_CC1,
     M_CORE_CC6,
+    M_CORE_CO,
 
     M_PEAK_CORE_FREQUENCY,
     M_PEAK_CORE_TEMPERATURE,
@@ -186,6 +187,9 @@ struct sample_options {
     // The SMU reports clocks against a nominal 100 MHz reference clock; on a
     // system whose reference clock runs elsewhere they are scaled by refclk/100.
     double refclk_mhz;
+    // Curve Optimizer counts per core slot, where co_present has the bit set
+    const int *co_counts;
+    unsigned int co_present;
 };
 
 void compute_sample(const pm_table *pmt, const system_info *sysinfo,
