@@ -475,6 +475,10 @@ static void run_controls(unsigned int force) {
             memset(&pmt, 0, sizeof(pmt));
     }
 
+    // Curve Optimizer counts address cores by where they are.
+    sysinfo.core_disable_map_pmt = pm_buf && pmt.version ? disabled_cores_from_pmt(&pmt) : 0;
+    get_processor_topology(&sysinfo, obj.codename);
+
     controls_run(&pmt, pm_buf, &sysinfo);
     free(pm_buf);
 }

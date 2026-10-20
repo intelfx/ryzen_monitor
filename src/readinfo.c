@@ -211,6 +211,9 @@ void get_processor_topology(system_info *sysinfo, int codename) {
     }
     sysinfo->ccds = count_set_bits(ccd_enable_map);
     sysinfo->ccxs = sysinfo->ccds * fuses.ccx_per_ccd;
+    sysinfo->ccd_enable_map = ccd_enable_map;
+    sysinfo->core_slots_per_ccd = slots;
+    sysinfo->ccx_per_ccd = fuses.ccx_per_ccd;
 
     // Disabled cores from the core fuse of each enabled CCD. Each CCD takes a fixed number of core slots in
     // the PM table. The map is only used if it adds up to the number of cores CPUID reports.

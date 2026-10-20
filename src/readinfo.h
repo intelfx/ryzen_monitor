@@ -34,6 +34,11 @@ typedef struct {
     unsigned int core_disable_map_pmt;
     unsigned int enabled_cores_count;
 
+    // Where the enabled cores are
+    unsigned int ccd_enable_map;        // physical CCDs
+    unsigned int core_slots_per_ccd;    // core slots per CCD in core_disable_map
+    unsigned int ccx_per_ccd;
+
     // How the topology was determined
     unsigned int family;
     unsigned int model;

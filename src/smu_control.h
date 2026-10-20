@@ -109,4 +109,13 @@ enum smu_control_result smu_get_pbo_scalar(const struct smu_settings *s, float *
 enum smu_control_result smu_set_oc_mode(const struct smu_settings *s, bool enable);
 enum smu_control_result smu_set_power_mode(const struct smu_settings *s, bool max_performance);
 
+/**
+ * Curve Optimizer counts. A core is addressed by its number as shown (the
+ * n-th enabled core); counts are clamped to what the generation supports.
+ **/
+int smu_co_limit(const struct smu_settings *s);
+enum smu_control_result smu_get_co(const struct smu_settings *s, const system_info *sysinfo, int core, int *count);
+enum smu_control_result smu_set_co(const struct smu_settings *s, const system_info *sysinfo, int core, int count);
+enum smu_control_result smu_set_co_all(const struct smu_settings *s, int count);
+
 #endif

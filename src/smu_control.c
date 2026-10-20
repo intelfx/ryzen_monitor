@@ -163,3 +163,86 @@ enum smu_control_result smu_set_power_mode(const struct smu_settings *s, bool ma
     make_args(&args, 0);
     return send(s->mp1[max_performance ? MSG_SET_MAX_PERFORMANCE : MSG_SET_POWER_SAVING], SMU_TYPE_MP1, &args);
 }
+
+int smu_co_limit(const struct smu_settings *s) {
+    return s->type == SETTINGS_TYPE_CPU4 ? 50 : 30;
+}
+
+static int clamp_co(const struct smu_settings *s, int count) {
+    int limit = smu_co_limit(s);
+
+    return count < -limit ? -limit : count > limit ? limit : count;
+}
+
+static unsigned int psm_margin_arg(int count) {
+    return (unsigned int)((count < 0 ? 0x100000 : 0) + count) & 0xFFFF;
+}
+
+// The SMU's address of a core: physical CCD in [31:28], CCX in [27:24] on
+// Zen 2 and earlier, core within the CCX (or the CCD) in [23:20].
+static bool core_mask(const system_info *sysinfo, int core, unsigned int *mask) {
+    unsigned int slots = sysinfo->core_slots_per_ccd, slot, ccd, physical_ccd, within;
+    int n = -1;
+
+    if (!slots || core < 0)
+        return false;
+
+    for (slot = 0; slot < sysinfo->ccds * slots && slot < 32; slot++)
+        if (!(sysinfo->core_disable_map & (1u << slot)) && ++n == core)
+            break;
+    if (n != core)
+        return false;
+
+    ccd = slot / slots;
+    within = slot % slots;
+    for (physical_ccd = 0; physical_ccd < 8; physical_ccd++)
+        if ((sysinfo->ccd_enable_map & (1u << physical_ccd)) && ccd-- == 0)
+            break;
+
+    if (sysinfo->family > 0x17)
+        *mask = (physical_ccd << 28) | ((within % 8) << 20);
+    else
+        *mask = (physical_ccd << 28) | ((within / 4 % 2) << 24) | ((within % 4) << 20);
+    return true;
+}
+
+enum smu_control_result smu_get_co(const struct smu_settings *s, const system_info *sysinfo, int core, int *count) {
+    enum smu_control_result ret;
+    unsigned int mask;
+    smu_arg_t args;
+
+    if (!s->rsmu[MSG_GET_DLDO_PSM_MARGIN])
+        return SMU_CONTROL_UNSUPPORTED;
+    if (!core_mask(sysinfo, core, &mask))
+        return SMU_CONTROL_FAILED;
+
+    make_args(&args, mask);
+    ret = send(s->rsmu[MSG_GET_DLDO_PSM_MARGIN], SMU_TYPE_RSMU, &args);
+    if (ret == SMU_CONTROL_OK)
+        *count = (int)args.args[0];
+    return ret;
+}
+
+enum smu_control_result smu_set_co(const struct smu_settings *s, const system_info *sysinfo, int core, int count) {
+    unsigned int mask;
+    smu_arg_t args;
+
+    if (!s->rsmu[MSG_SET_DLDO_PSM_MARGIN] && !s->mp1[MSG_SET_DLDO_PSM_MARGIN])
+        return SMU_CONTROL_UNSUPPORTED;
+    if (!core_mask(sysinfo, core, &mask))
+        return SMU_CONTROL_FAILED;
+
+    make_args(&args, (mask & 0xFFF00000) | psm_margin_arg(clamp_co(s, count)));
+    if (s->mp1[MSG_SET_DLDO_PSM_MARGIN])
+        return send(s->mp1[MSG_SET_DLDO_PSM_MARGIN], SMU_TYPE_MP1, &args);
+    return send(s->rsmu[MSG_SET_DLDO_PSM_MARGIN], SMU_TYPE_RSMU, &args);
+}
+
+enum smu_control_result smu_set_co_all(const struct smu_settings *s, int count) {
+    smu_arg_t args;
+
+    make_args(&args, psm_margin_arg(clamp_co(s, count)));
+    if (s->mp1[MSG_SET_ALL_DLDO_PSM_MARGIN])
+        return send(s->mp1[MSG_SET_ALL_DLDO_PSM_MARGIN], SMU_TYPE_MP1, &args);
+    return send(s->rsmu[MSG_SET_ALL_DLDO_PSM_MARGIN], SMU_TYPE_RSMU, &args);
+}

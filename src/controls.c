@@ -37,12 +37,17 @@ enum control_kind {
     CTL_DISABLE_OC,
     CTL_ENABLE_ECO,
     CTL_ENABLE_MAXPERF,
+    CTL_GET_CO,
+    CTL_GET_CO_ALL,
+    CTL_SET_CO,
+    CTL_SET_CO_ALL,
 };
 
 struct control_action {
     enum control_kind kind;
     const struct smu_limit *limit;
     int value;
+    const char *list;       // CTL_GET_CO, CTL_SET_CO: the option argument
 };
 
 #define MAX_ACTIONS 64
@@ -64,6 +69,10 @@ static const struct {
     { "set-disable-oc", CTL_DISABLE_OC, no_argument, "Disable OC mode" },
     { "set-enable-eco", CTL_ENABLE_ECO, no_argument, "Enable power saving mode (APU)" },
     { "set-enable-maxperf", CTL_ENABLE_MAXPERF, no_argument, "Enable maximum performance mode (APU)" },
+    { "get-cocount", CTL_GET_CO, required_argument, "Get the Curve Optimizer count of cores, comma-separated (from 0)" },
+    { "get-cocountall", CTL_GET_CO_ALL, no_argument, "Get the Curve Optimizer counts of all cores" },
+    { "set-cocount", CTL_SET_CO, required_argument, "Set the Curve Optimizer count of cores, e.g. 0+10,1-5,2-20" },
+    { "set-cocountall", CTL_SET_CO_ALL, required_argument, "Set the Curve Optimizer count of all cores" },
 };
 
 #define NFIXED ((int)(sizeof(fixed_options) / sizeof(fixed_options[0])))
@@ -98,11 +107,14 @@ bool controls_handle_option(int code, const char *arg) {
     } else {
         a.kind = fixed_options[index - 2 * smu_limits_count].kind;
     }
-    if (arg) {
+    if (a.kind == CTL_GET_CO || a.kind == CTL_SET_CO) {
+        a.list = arg;
+    } else if (arg) {
         char *end;
 
+        // Only Curve Optimizer counts can be negative.
         a.value = strtol(arg, &end, 10);
-        if (*end || a.value <= 0) {
+        if (*end || (a.kind != CTL_SET_CO_ALL && a.value <= 0)) {
             fprintf(stderr, "Invalid value \"%s\".\n", arg);
             exit(-1);
         }
@@ -248,13 +260,99 @@ static void run_action(const struct control_action *a, const struct smu_settings
             fprintf(stdout, "set-enable-%s: %s\n", a->kind == CTL_ENABLE_ECO ? "eco" : "maxperf",
                     ret == SMU_CONTROL_OK ? "1" : result_str(ret));
             break;
+
+        default:
+            break;
+    }
+}
+
+// --get-cocount=0,1,2 and --set-cocount=0+10,1-5: a core number, then for setting a signed count.
+static void run_co_list(const struct control_action *a, const struct smu_settings *s, const system_info *sysinfo) {
+    const char *name = a->kind == CTL_SET_CO ? "set-cocount" : "get-cocount";
+    const char *p = a->list;
+
+    while (*p) {
+        enum smu_control_result ret = SMU_CONTROL_UNSUPPORTED;
+        char *end;
+        long core = strtol(p, &end, 10);
+        long count = 0;
+
+        if (end == p || core < 0) {
+            fprintf(stdout, "%s: ERR (%s)\n", name, p);
+            return;
+        }
+        p = end;
+        if (a->kind == CTL_SET_CO) {
+            if (*p != '+' && *p != '-') {
+                fprintf(stdout, "%s: ERR (%s)\n", name, a->list);
+                return;
+            }
+            count = strtol(p, &end, 10);
+            p = end;
+            if (s)
+                ret = smu_set_co(s, sysinfo, core, count);
+        } else if (s) {
+            int c;
+
+            ret = smu_get_co(s, sysinfo, core, &c);
+            count = c;
+        }
+
+        if (ret == SMU_CONTROL_OK)
+            fprintf(stdout, "%s: %ld%+ld\n", name, core, count);
+        else
+            fprintf(stdout, "%s: %s\n", name, result_str(ret));
+
+        if (*p == ',')
+            p++;
+        else if (*p) {
+            fprintf(stdout, "%s: ERR (%s)\n", name, p);
+            return;
+        }
     }
 }
 
 void controls_run(const pm_table *pmt, unsigned char *pm_buf, const system_info *sysinfo) {
     const struct smu_settings *s = smu_settings_for(obj.codename);
 
-    (void)sysinfo;
-    for (int i = 0; i < nactions; i++)
-        run_action(&actions[i], s, pmt, pm_buf);
+    for (int i = 0; i < nactions; i++) {
+        const struct control_action *a = &actions[i];
+        enum smu_control_result ret = SMU_CONTROL_UNSUPPORTED;
+
+        switch (a->kind) {
+            case CTL_GET_CO:
+            case CTL_SET_CO:
+                run_co_list(a, s, sysinfo);
+                break;
+
+            case CTL_GET_CO_ALL:
+                fprintf(stdout, "get-cocountall: ");
+                for (unsigned int core = 0; core < sysinfo->enabled_cores_count; core++) {
+                    int count = 0;
+
+                    if (s)
+                        ret = smu_get_co(s, sysinfo, core, &count);
+                    if (ret != SMU_CONTROL_OK) {
+                        fprintf(stdout, "%s", result_str(ret));
+                        break;
+                    }
+                    fprintf(stdout, "%s%u%+d", core ? "," : "", core, count);
+                }
+                fprintf(stdout, "\n");
+                break;
+
+            case CTL_SET_CO_ALL:
+                if (s)
+                    ret = smu_set_co_all(s, a->value);
+                if (ret == SMU_CONTROL_OK)
+                    fprintf(stdout, "set-cocountall: %+d\n", a->value);
+                else
+                    fprintf(stdout, "set-cocountall: %s\n", result_str(ret));
+                break;
+
+            default:
+                run_action(a, s, pmt, pm_buf);
+                break;
+        }
+    }
 }
