@@ -59,6 +59,7 @@ static struct display display = { .views = VIEWS_DEFAULT };
 #define pmta0(elem) ((pmt->elem)?(*pmt->elem):0)
 
 static bool dump_table = false;
+static bool init_debug = false;
 static const char *export_path = NULL;
 static bool export_created = false;
 
@@ -219,6 +220,22 @@ static bool handle_key(int key) {
     return true;
 }
 
+// Show how the topology and the PM table were determined.
+static void print_topology_debug(const system_info *sysinfo, const pm_table *pmt) {
+    fprintf(stdout, "Family 0x%X, model 0x%X, codename %s\n", sysinfo->family, sysinfo->model, sysinfo->codename);
+    fprintf(stdout, "PM table version 0x%X (reported 0x%X), %u bytes (%u mapped)\n",
+            pmt->version, obj.pm_table_version, obj.pm_table_size, pmt->min_size);
+    fprintf(stdout, "CCD fuses: 0x%08X 0x%08X\n", sysinfo->ccd_fuses[0], sysinfo->ccd_fuses[1]);
+    fprintf(stdout, "Core fuse: 0x%08X, values:", sysinfo->core_fuse);
+    for (unsigned int i = 0; i < sysinfo->ccds && i < 8; i++)
+        fprintf(stdout, " 0x%08X", sysinfo->core_fuse_values[i]);
+    fprintf(stdout, "\n");
+    fprintf(stdout, "Disabled cores: 0x%X, from the %s (the PM table says 0x%X)\n",
+            sysinfo->core_disable_map, sysinfo->core_map_source, sysinfo->core_disable_map_pmt);
+    fprintf(stdout, "Cores: %u, enabled %u; CCDs: %u, CCXs: %u, cores per CCX: %u\n",
+            sysinfo->cores, sysinfo->enabled_cores_count, sysinfo->ccds, sysinfo->ccxs, sysinfo->cores_per_ccx);
+}
+
 void start_pm_monitor(unsigned int force, int repeating, const struct output_ops* ops) {
     unsigned char *pm_buf;
     pm_table pmt;
@@ -271,6 +288,11 @@ void start_pm_monitor(unsigned int force, int repeating, const struct output_ops
         sysinfo.core_disable_map_pmt = disabled_cores_from_pmt(&pmt);
 
     get_processor_topology(&sysinfo, obj.codename);
+
+    if (init_debug) {
+        print_topology_debug(&sysinfo, &pmt);
+        return;
+    }
 
     switch (obj.smu_if_version) {
         case IF_VERSION_9:  sysinfo.if_ver =  9; break;
@@ -450,6 +472,7 @@ void show_help(char* program) {
             "\t-t, --dumpfile=<filename> - Test mode. Read PM Table from raw-dumfile. Use in conjunction with -f\n"
             "\t    --dumptable           - With -t, also print every element of the table.\n"
             "\t-w, --writedump=<file>    - Save the PM Table to <file>, with the table version prepended to the name.\n"
+            "\t    --init-debug          - Show how the processor topology was determined and exit.\n"
             "\t-o, --format=<format>     - Output format (boxdrawing, text, json, ndjson, influx, prometheus, netdata)\n"
             "\t-1, --once                - Print once and exit\n"
             "\t    --view=<view>[,...]   - Show only these views (info, cores, stats, electrical, memory, gfx, power, summary, all)\n"
@@ -494,7 +517,7 @@ int main(int argc, char** argv) {
     }
 
     //Parse arguments
-    enum { OPT_VIEW = 0x100, OPT_TEST_EXPORT, OPT_DUMPTABLE };
+    enum { OPT_VIEW = 0x100, OPT_TEST_EXPORT, OPT_DUMPTABLE, OPT_INIT_DEBUG };
     static const struct option long_options[] = {
         { "help",       no_argument,       NULL, 'h' },
         { "version",    no_argument,       NULL, 'v' },
@@ -505,6 +528,7 @@ int main(int argc, char** argv) {
         { "dumpfile",   required_argument, NULL, 't' },
         { "dumptable",  no_argument,       NULL, OPT_DUMPTABLE },
         { "writedump",  required_argument, NULL, 'w' },
+        { "init-debug", no_argument,       NULL, OPT_INIT_DEBUG },
         { "format",     required_argument, NULL, 'o' },
         { "once",       no_argument,       NULL, '1' },
         { "view",       required_argument, NULL, OPT_VIEW },
@@ -577,6 +601,9 @@ int main(int argc, char** argv) {
                 break;
             case OPT_DUMPTABLE:
                 dump_table = true;
+                break;
+            case OPT_INIT_DEBUG:
+                init_debug = true;
                 break;
             case OPT_TEST_EXPORT:
                 ops = &influx_ops;
