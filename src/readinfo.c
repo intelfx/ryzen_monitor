@@ -294,7 +294,7 @@ double detect_refclk(void) {
 
 void print_memory_timings() {
     const char* bool_str[2] = { "Disabled", "Enabled" };
-    unsigned int value1, value2, offset;
+    unsigned int value1, value2, offset = 0;
 
     READ_SMN_V1(0x50200);
     offset = value1 == 0x300 ? 0x100000 : 0;
