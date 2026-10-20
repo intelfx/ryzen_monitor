@@ -28,9 +28,9 @@ For an unknown version, ryzen_monitor names a known revision of the same table, 
 ![ryzen monitor](https://user-images.githubusercontent.com/50338637/107124627-4e733e00-68a5-11eb-9596-bb3d35120a73.png)
 
 ## Building
-First install the [ryzen_smu](https://github.com/amkillam/ryzen_smu) kernel module, version 0.1.7: the bundled
-library only works with that version of the driver. A good indication of whether the module works for you is
-whether `/sys/kernel/ryzen_smu_drv/pm_table` is available.
+First install the [ryzen_smu](https://github.com/amkillam/ryzen_smu) kernel module, version 0.1.3 to 0.1.7.
+A good indication of whether the module works for you is whether `/sys/kernel/ryzen_smu_drv/pm_table` is
+available.
 
 Then pull and make **ryzen_monitor**:
 ```bash

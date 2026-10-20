@@ -25,8 +25,14 @@
 
 #include "smu_common.h"
 
-/* Version the loaded driver must use to be compatible. */
-#define LIBSMU_SUPPORTED_DRIVER_VERSION                    "0.1.7"
+/*
+ * Versions of the driver the library works with, encoded as in driver_version.
+ * 0.1.3 added the HSMP mailbox, which the library opens; the interface has not
+ * changed since. The newest is the version of the driver this library comes with.
+ */
+#define LIBSMU_DRIVER_VERSION(maj, min, rev)              ((maj) << 16 | (min) << 8 | (rev))
+#define LIBSMU_DRIVER_VERSION_MIN                         LIBSMU_DRIVER_VERSION(0, 1, 3)
+#define LIBSMU_DRIVER_VERSION_MAX                         LIBSMU_DRIVER_VERSION(0, 1, 7)
 
 /**
  * SMU Mailbox Target

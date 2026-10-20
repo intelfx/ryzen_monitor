@@ -76,12 +76,12 @@ static smu_return_val smu_init_parse(smu_obj_t* obj) {
     if (ret < 0)
         return SMU_Return_RWError;
 
-    // The driver version must match the expected exactly.
-    if (strcmp(rd_buf, LIBSMU_SUPPORTED_DRIVER_VERSION "\n"))
+    if (sscanf(rd_buf, "%d.%d.%d\n", &ver_maj, &ver_min, &ver_rev) != 3)
         return SMU_Return_DriverVersion;
 
-    sscanf(rd_buf, "%d.%d.%d\n", &ver_maj, &ver_min, &ver_rev);
-    obj->driver_version = ver_maj << 16 | ver_min << 8 | ver_rev;
+    obj->driver_version = LIBSMU_DRIVER_VERSION(ver_maj, ver_min, ver_rev);
+    if (obj->driver_version < LIBSMU_DRIVER_VERSION_MIN || obj->driver_version > LIBSMU_DRIVER_VERSION_MAX)
+        return SMU_Return_DriverVersion;
 
     // The version of the SMU **MUST** be present.
     if (!try_open_path(VERSION_PATH, O_RDONLY, &tmp_fd))
