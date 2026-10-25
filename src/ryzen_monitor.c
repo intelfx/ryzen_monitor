@@ -493,11 +493,12 @@ void read_from_dumpfile(char *dumpfile, unsigned int version, const struct outpu
         print_table_elements(readbuf, bytes_read);
 }
 
-// Run the --get-* and --set-* options.
-static void run_controls(unsigned int force) {
+// Run the --get-* and --set-* options. Returns the exit code.
+static int run_controls(unsigned int force) {
     unsigned char *pm_buf = NULL;
     pm_table pmt;
     system_info sysinfo;
+    int status;
 
     memset(&pmt, 0, sizeof(pmt));
     memset(&sysinfo, 0, sizeof(sysinfo));
@@ -517,8 +518,9 @@ static void run_controls(unsigned int force) {
     sysinfo.core_disable_map_pmt = pm_buf && pmt.version ? disabled_cores_from_pmt(&pmt) : 0;
     get_processor_topology(&sysinfo, obj.codename);
 
-    controls_run(&pmt, pm_buf, &sysinfo);
+    status = controls_run(&pmt, pm_buf, &sysinfo);
     free(pm_buf);
+    return status;
 }
 
 void print_version() {
@@ -754,7 +756,7 @@ int main(int argc, char** argv) {
             exit(ret == SMU_Return_RWError ? EXIT_DRIVER : EXIT_UNSUPPORTED);
         }
 
-        if (controls_requested()) run_controls(force);
+        if (controls_requested()) status = run_controls(force);
         else if (writedump) write_dumpfile(writedump);
         else if (printtimings) print_memory_timings();
         else status = start_pm_monitor(force, repeating, ops);

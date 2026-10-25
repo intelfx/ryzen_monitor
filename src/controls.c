@@ -159,16 +159,31 @@ static const char *result_str(enum smu_control_result ret) {
     return ret == SMU_CONTROL_UNSUPPORTED ? "NA" : "ERR";
 }
 
-// OC mode is enabled when the SMU reports a PBO scalar of 0.
-static int oc_mode(const struct smu_settings *s) {
-    float scalar;
-
-    if (!s || smu_get_pbo_scalar(s, &scalar) != SMU_CONTROL_OK)
-        return -1;
-    return scalar == 0;
+static int result_exit_code(enum smu_control_result ret) {
+    switch (ret) {
+        case SMU_CONTROL_OK:            return EXIT_OK;
+        case SMU_CONTROL_UNSUPPORTED:   return EXIT_UNSUPPORTED;
+        default:                        return EXIT_DRIVER;
+    }
 }
 
-static void run_action(const struct control_action *a, const struct smu_settings *s,
+static int worst(int a, int b) {
+    return a > b ? a : b;
+}
+
+// OC mode is enabled when the SMU reports a PBO scalar of 0. Sets *enabled to -1 if unknown.
+static enum smu_control_result oc_mode(const struct smu_settings *s, int *enabled) {
+    enum smu_control_result ret = SMU_CONTROL_UNSUPPORTED;
+    float scalar;
+
+    if (s)
+        ret = smu_get_pbo_scalar(s, &scalar);
+    *enabled = ret == SMU_CONTROL_OK ? scalar == 0 : -1;
+    return ret;
+}
+
+// Returns the exit code.
+static int run_action(const struct control_action *a, const struct smu_settings *s,
         const pm_table *pmt, unsigned char *pm_buf) {
     enum smu_control_result ret = SMU_CONTROL_UNSUPPORTED;
     float *field, scalar = 0;
@@ -181,7 +196,7 @@ static void run_action(const struct control_action *a, const struct smu_settings
                 fprintf(stdout, "get-%s: %.0f\n", a->limit->name, *field);
             else
                 fprintf(stdout, "get-%s: NA\n", a->limit->name);
-            break;
+            return field ? EXIT_OK : EXIT_UNSUPPORTED;
 
         case CTL_SET_LIMIT:
             field = limit_field(pmt, a->limit);
@@ -229,24 +244,24 @@ static void run_action(const struct control_action *a, const struct smu_settings
             break;
 
         case CTL_GET_OCMODE:
-            before = oc_mode(s);
-            if (before >= 0)
+            ret = oc_mode(s, &before);
+            if (ret == SMU_CONTROL_OK)
                 fprintf(stdout, "get-ocmode: %d\n", before);
             else
-                fprintf(stdout, "get-ocmode: NA\n");
+                fprintf(stdout, "get-ocmode: %s\n", result_str(ret));
             break;
 
         case CTL_ENABLE_OC:
         case CTL_DISABLE_OC:
             fprintf(stdout, "set-%s-oc: ", a->kind == CTL_ENABLE_OC ? "enable" : "disable");
-            before = oc_mode(s);
+            oc_mode(s, &before);
             if (s)
                 ret = smu_set_oc_mode(s, a->kind == CTL_ENABLE_OC);
             if (ret == SMU_CONTROL_OK)
                 fprintf(stdout, "%d", a->kind == CTL_ENABLE_OC);
             else
                 fprintf(stdout, "%s", result_str(ret));
-            after = oc_mode(s);
+            oc_mode(s, &after);
             if (before >= 0)
                 fprintf(stdout, " before: %d", before);
             if (after >= 0)
@@ -265,12 +280,15 @@ static void run_action(const struct control_action *a, const struct smu_settings
         default:
             break;
     }
+    return result_exit_code(ret);
 }
 
 // --get-cocount=0,1,2 and --set-cocount=0+10,1-5: a core number, then for setting a signed count.
-static void run_co_list(const struct control_action *a, const struct smu_settings *s, const system_info *sysinfo) {
+// Returns the exit code.
+static int run_co_list(const struct control_action *a, const struct smu_settings *s, const system_info *sysinfo) {
     const char *name = a->kind == CTL_SET_CO ? "set-cocount" : "get-cocount";
     const char *p = a->list;
+    int status = EXIT_OK;
 
     while (*p) {
         enum smu_control_result ret = SMU_CONTROL_UNSUPPORTED;
@@ -280,13 +298,13 @@ static void run_co_list(const struct control_action *a, const struct smu_setting
 
         if (end == p || core < 0) {
             fprintf(stdout, "%s: ERR (%s)\n", name, p);
-            return;
+            return worst(status, EXIT_USAGE);
         }
         p = end;
         if (a->kind == CTL_SET_CO) {
             if (*p != '+' && *p != '-') {
                 fprintf(stdout, "%s: ERR (%s)\n", name, a->list);
-                return;
+                return worst(status, EXIT_USAGE);
             }
             count = strtol(p, &end, 10);
             p = end;
@@ -303,18 +321,21 @@ static void run_co_list(const struct control_action *a, const struct smu_setting
             fprintf(stdout, "%s: %ld%+ld\n", name, core, count);
         else
             fprintf(stdout, "%s: %s\n", name, result_str(ret));
+        status = worst(status, result_exit_code(ret));
 
         if (*p == ',')
             p++;
         else if (*p) {
             fprintf(stdout, "%s: ERR (%s)\n", name, p);
-            return;
+            return worst(status, EXIT_USAGE);
         }
     }
+    return status;
 }
 
-void controls_run(const pm_table *pmt, unsigned char *pm_buf, const system_info *sysinfo) {
+int controls_run(const pm_table *pmt, unsigned char *pm_buf, const system_info *sysinfo) {
     const struct smu_settings *s = smu_settings_for(obj.codename);
+    int status = EXIT_OK;
 
     for (int i = 0; i < nactions; i++) {
         const struct control_action *a = &actions[i];
@@ -323,7 +344,7 @@ void controls_run(const pm_table *pmt, unsigned char *pm_buf, const system_info 
         switch (a->kind) {
             case CTL_GET_CO:
             case CTL_SET_CO:
-                run_co_list(a, s, sysinfo);
+                status = worst(status, run_co_list(a, s, sysinfo));
                 break;
 
             case CTL_GET_CO_ALL:
@@ -340,6 +361,7 @@ void controls_run(const pm_table *pmt, unsigned char *pm_buf, const system_info 
                     fprintf(stdout, "%s%u%+d", core ? "," : "", core, count);
                 }
                 fprintf(stdout, "\n");
+                status = worst(status, result_exit_code(ret));
                 break;
 
             case CTL_SET_CO_ALL:
@@ -349,11 +371,13 @@ void controls_run(const pm_table *pmt, unsigned char *pm_buf, const system_info 
                     fprintf(stdout, "set-cocountall: %+d\n", a->value);
                 else
                     fprintf(stdout, "set-cocountall: %s\n", result_str(ret));
+                status = worst(status, result_exit_code(ret));
                 break;
 
             default:
-                run_action(a, s, pmt, pm_buf);
+                status = worst(status, run_action(a, s, pmt, pm_buf));
                 break;
         }
     }
+    return status;
 }

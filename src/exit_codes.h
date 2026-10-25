@@ -18,7 +18,7 @@
 #ifndef EXIT_CODES_H
 #define EXIT_CODES_H
 
-// Exit codes, as listed in the help text.
+// Exit codes, as listed in the help text. When several things fail, the highest code wins.
 enum exit_code {
     EXIT_OK = 0,
     EXIT_USAGE = 1,         // invalid option or argument

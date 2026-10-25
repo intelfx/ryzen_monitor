@@ -18,8 +18,8 @@
 /**
  * The --get-* and --set-* options: they read or change SMU settings, print
  * one line each ("get-ppt: 142", "set-ppt: 120 before: 142 after: 120",
- * "NA" if not available, "ERR" on failure) and exit. Their names and output
- * are those of ryzen_monitor_ng.
+ * "NA" if not available, "ERR" on failure) and exit with the highest exit code
+ * of the results. Their names and output are those of ryzen_monitor_ng.
  **/
 
 #ifndef CONTROLS_H
@@ -43,6 +43,6 @@ void controls_print_help(void);
 
 // Run the requested actions in command line order. pmt maps pm_buf, which is
 // re-read to show limits after a change.
-void controls_run(const pm_table *pmt, unsigned char *pm_buf, const system_info *sysinfo);
+int controls_run(const pm_table *pmt, unsigned char *pm_buf, const system_info *sysinfo);
 
 #endif
