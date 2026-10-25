@@ -265,7 +265,8 @@ static void print_topology_debug(const system_info *sysinfo, const pm_table *pmt
             sysinfo->cores, sysinfo->enabled_cores_count, sysinfo->ccds, sysinfo->ccxs, sysinfo->cores_per_ccx);
 }
 
-void start_pm_monitor(unsigned int force, int repeating, const struct output_ops* ops) {
+// Returns the exit code: a single sample (--once) fails if the PM table cannot be read.
+int start_pm_monitor(unsigned int force, int repeating, const struct output_ops* ops) {
     unsigned char *pm_buf;
     pm_table pmt;
     system_info sysinfo;
@@ -322,7 +323,7 @@ void start_pm_monitor(unsigned int force, int repeating, const struct output_ops
 
     if (init_debug) {
         print_topology_debug(&sysinfo, &pmt);
-        return;
+        return EXIT_OK;
     }
 
     switch (obj.smu_if_version) {
@@ -383,6 +384,12 @@ void start_pm_monitor(unsigned int force, int repeating, const struct output_ops
     ops->cleanup();
     terminal_restore();
     export_cleanup();
+
+    if (!have_sample && !repeating) {
+        fprintf(stderr, "Could not read the PM Table.\n");
+        return EXIT_DRIVER;
+    }
+    return EXIT_OK;
 }
 
 // Save the current PM table to path, with the table version prepended to the file name.
@@ -583,6 +590,7 @@ struct timespec parse_fractional_time(const char* s) {
 int main(int argc, char** argv) {
     smu_return_val ret;
     int c=0, force=0, core=0, printtimings=0, repeating=1;
+    int status = EXIT_OK;
     char *dumpfile=0, *writedump=0;
     const struct output_ops* ops = &box_drawing_ops;
     bool format_set = false;
@@ -749,8 +757,8 @@ int main(int argc, char** argv) {
         if (controls_requested()) run_controls(force);
         else if (writedump) write_dumpfile(writedump);
         else if (printtimings) print_memory_timings();
-        else start_pm_monitor(force, repeating, ops);
+        else status = start_pm_monitor(force, repeating, ops);
     }
 
-    return 0;
+    return status;
 }
