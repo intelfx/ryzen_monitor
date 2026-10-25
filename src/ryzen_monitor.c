@@ -177,8 +177,8 @@ void signal_interrupt(int sig) {
         case SIGTERM:
             if (stop_requested)
                 // We got stuck cleaning up and the user sent another signal.
-                // Exit now without cleaning up.
-                _exit(1);
+                // Exit now without cleaning up, as if killed by the signal.
+                _exit(128 + sig);
             stop_requested = 1;
             break;
         default:
