@@ -24,6 +24,7 @@
 
 #include "controls.h"
 #include "smu_control.h"
+#include "exit_codes.h"
 
 extern smu_obj_t obj;
 
@@ -116,13 +117,13 @@ bool controls_handle_option(int code, const char *arg) {
         a.value = strtol(arg, &end, 10);
         if (*end || (a.kind != CTL_SET_CO_ALL && a.value <= 0)) {
             fprintf(stderr, "Invalid value \"%s\".\n", arg);
-            exit(-1);
+            exit(EXIT_USAGE);
         }
     }
 
     if (nactions == MAX_ACTIONS) {
         fprintf(stderr, "Too many --get-* and --set-* options.\n");
-        exit(-1);
+        exit(EXIT_USAGE);
     }
     actions[nactions++] = a;
     return true;

@@ -28,6 +28,7 @@
 #include <time.h>
 #include <x86intrin.h>
 #include "readinfo.h"
+#include "exit_codes.h"
 
 extern smu_obj_t obj;
 
@@ -361,9 +362,9 @@ void print_memory_timings() {
         value1 >> 11 & 0x3ff,
         value1 >> 22 & 0x3ff);
 
-    exit(0);
+    exit(EXIT_OK);
 
 _READ_ERROR:
     fprintf(stderr, "Unable to read SMN address space.\n");
-    exit(1);
+    exit(EXIT_DRIVER);
 }

@@ -45,6 +45,7 @@
 #include "output_ops.h"
 #include "controls.h"
 #include "smu_control.h"
+#include "exit_codes.h"
 
 #define PROGRAM_VERSION "1.0.6"
 
@@ -73,13 +74,13 @@ static void export_setup(void) {
     if (stat(export_path, &st) == 0) {
         if (!S_ISFIFO(st.st_mode)) {
             fprintf(stderr, "%s exists and is not a named pipe.\n", export_path);
-            exit(-1);
+            exit(EXIT_IO);
         }
         return;
     }
     if (mkfifo(export_path, 0644) != 0) {
         perror("Can't create named pipe for export");
-        exit(-1);
+        exit(EXIT_IO);
     }
     export_created = true;
     // A reader that goes away must not kill us.
@@ -273,13 +274,13 @@ void start_pm_monitor(unsigned int force, int repeating, const struct output_ops
 
     if (!smu_pm_tables_supported(&obj)) {
         fprintf(stderr, "PM Tables are not supported on this platform.\n");
-        exit(0);
+        exit(EXIT_UNSUPPORTED);
     }
 
     pm_buf = calloc(obj.pm_table_size, sizeof(unsigned char));
     if (!pm_buf) {
         fprintf(stderr, "Could not allocate memory for the PM Table.\n");
-        exit(0);
+        exit(EXIT_IO);
     }
 
     if (force) {
@@ -296,12 +297,12 @@ void start_pm_monitor(unsigned int force, int repeating, const struct output_ops
             fprintf(stderr, "Version 0x%x is a revision of the same table; -f 0x%x might work, but the values can be wrong.\n", similar, similar);
         fprintf(stderr, "Processor name: %s\n", get_processor_name());
         fprintf(stderr, "SMU FW version: %s\n", smu_get_fw_version(&obj));
-        exit(0);
+        exit(EXIT_UNSUPPORTED);
     }
     //Prevent illegal memory access
     if (obj.pm_table_size < pmt.min_size) {
         fprintf(stderr, "Selected PM Table is larger than the PM Table returned by the SMU.\n");
-        exit(0);
+        exit(EXIT_UNSUPPORTED);
     }
     memset(&sysinfo, 0, sizeof(sysinfo));
     //Maximum core count. Just to be safe. Will be overwritten by get_processor_topology(...).
@@ -394,21 +395,25 @@ static void write_dumpfile(const char *path) {
 
     if (!smu_pm_tables_supported(&obj)) {
         fprintf(stderr, "PM Tables are not supported on this platform.\n");
-        exit(-1);
+        exit(EXIT_UNSUPPORTED);
     }
 
     pm_buf = calloc(obj.pm_table_size, sizeof(unsigned char));
-    if (!pm_buf || smu_read_pm_table(&obj, pm_buf, obj.pm_table_size) != SMU_Return_OK) {
+    if (!pm_buf) {
+        fprintf(stderr, "Could not allocate memory for the PM Table.\n");
+        exit(EXIT_IO);
+    }
+    if (smu_read_pm_table(&obj, pm_buf, obj.pm_table_size) != SMU_Return_OK) {
         fprintf(stderr, "Could not read the PM Table.\n");
-        exit(-1);
+        exit(EXIT_DRIVER);
     }
 
     if (asprintf(&name, "%.*s%X_%s", dirlen, path, obj.pm_table_version, path + dirlen) < 0)
-        exit(-1);
+        exit(EXIT_IO);
     fd = fopen(name, "wb");
     if (!fd || fwrite(pm_buf, 1, obj.pm_table_size, fd) != obj.pm_table_size || fclose(fd) != 0) {
         fprintf(stderr, "Could not write the dumpfile (\"%s\").\n", name);
-        exit(-1);
+        exit(EXIT_IO);
     }
     fprintf(stdout, "Written %u bytes in dumpfile (\"%s\").\n", obj.pm_table_size, name);
 
@@ -436,14 +441,14 @@ void read_from_dumpfile(char *dumpfile, unsigned int version, const struct outpu
 
     if (!version) {
         fprintf(stderr, "You need to specify a PM Table version with -f.\n");
-        exit(0);
+        exit(EXIT_USAGE);
     }
 
     //Read file
     fd = fopen(dumpfile, "rb");
     if(!fd) {
         fprintf(stderr, "Could not read the dumpfile (\"%s\").\n", dumpfile);
-        exit(0);
+        exit(EXIT_IO);
     }
     bytes_read=fread(readbuf,sizeof(char),sizeof(readbuf),fd);
     fclose(fd);
@@ -455,14 +460,14 @@ void read_from_dumpfile(char *dumpfile, unsigned int version, const struct outpu
         fprintf(stderr, "This PM Table version (0x%x) is currently not supported.\n", version);
         if (similar)
             fprintf(stderr, "Version 0x%x is a revision of the same table; -f 0x%x might work, but the values can be wrong.\n", similar, similar);
-        exit(0);
+        exit(EXIT_UNSUPPORTED);
     }
     else fprintf(stderr, "Using PM Table version 0x%x.\n", version);
 
     //Prevent illegal memory access
     if (bytes_read < pmt.min_size) {
         fprintf(stderr, "Read %d bytes from \"%s\", but the selected PM Table is %d bytes long.\n", bytes_read, dumpfile, pmt.min_size);
-        exit(0);
+        exit(EXIT_IO);
     }
 
     memset(&sysinfo, 0, sizeof(sysinfo)); //Did not read sysinfo
@@ -511,7 +516,7 @@ static void run_controls(unsigned int force) {
 
 void print_version() {
     fprintf(stdout, "Ryzen Monitor " PROGRAM_VERSION "\n");
-    exit(0);
+    exit(EXIT_OK);
 }
 
 static void show_help_options(char* program);
@@ -550,7 +555,15 @@ static void show_help_options(char* program) {
             "\t    --test-export         - Same as --format=influx.\n"
             "\n"
         "Keys in the interactive monitor:\n"
-            "\tq - quit, c - compact mode, i/k/s/o/e/m/g/p/y - info/cores/stats/co/electrical/memory/gfx/power/summary view\n",
+            "\tq - quit, c - compact mode, i/k/s/o/e/m/g/p/y - info/cores/stats/co/electrical/memory/gfx/power/summary view\n"
+            "\n"
+        "Exit codes:\n"
+            "\t0 - success\n"
+            "\t1 - syntax or usage error\n"
+            "\t2 - environmental error (system not supported)\n"
+            "\t3 - driver communication error\n"
+            "\t4 - file I/O or other system error\n"
+        ,
         program
     );
 }
@@ -581,7 +594,7 @@ int main(int argc, char** argv) {
     if (sigaction(SIGTERM, &sa, NULL) != 0 ||
         sigaction(SIGINT, &sa, NULL) != 0) {
         fprintf(stderr, "Can't set up signal hooks.\n");
-        exit(-1);
+        exit(EXIT_IO);
     }
 
     //Parse arguments
@@ -616,7 +629,7 @@ int main(int argc, char** argv) {
         switch (c) {
             case 'v':
                 print_version();
-                exit(0);
+                exit(EXIT_OK);
             case 'm':
                 printtimings = 1;
                 break;
@@ -629,13 +642,13 @@ int main(int argc, char** argv) {
             case 'f':
                 if(!optarg || sscanf(optarg,"%x", &force)!=1) {
                     show_help(argv[0]);
-                    exit(0);
+                    exit(EXIT_USAGE);
                 }
                 break;
             case 't':
                 if(!optarg || strlen(optarg)==0) {
                     show_help(argv[0]);
-                    exit(0);
+                    exit(EXIT_USAGE);
                 }
                 dumpfile=optarg;
                 break;
@@ -657,7 +670,7 @@ int main(int argc, char** argv) {
                     ops = &netdata_ops;
                 else {
                     show_help(argv[0]);
-                    exit(0);
+                    exit(EXIT_USAGE);
                 }
                 format_set = true;
                 break;
@@ -683,7 +696,7 @@ int main(int argc, char** argv) {
                 refclk_mhz = strtod(optarg, NULL);
                 if (refclk_mhz < 90 || refclk_mhz > 130) {
                     fprintf(stderr, "The reference clock must be between 90 and 130 MHz.\n");
-                    exit(-1);
+                    exit(EXIT_USAGE);
                 }
                 break;
             case OPT_TEST_EXPORT:
@@ -693,7 +706,7 @@ int main(int argc, char** argv) {
             case OPT_VIEW:
                 if (!parse_views(optarg, &display.views)) {
                     fprintf(stderr, "Unknown view in \"%s\".\n", optarg);
-                    exit(-1);
+                    exit(EXIT_USAGE);
                 }
                 break;
             case 'u':
@@ -701,9 +714,9 @@ int main(int argc, char** argv) {
                 break;
             case 'h':
                 show_help(argv[0]);
-                exit(0);
+                exit(EXIT_OK);
             case '?':
-                exit(0);
+                exit(EXIT_USAGE);
             default:
                 controls_handle_option(c, optarg);
                 break;
@@ -724,13 +737,13 @@ int main(int argc, char** argv) {
     {
         if (getuid() != 0 && geteuid() != 0) {
             fprintf(stderr, "Program must be run as root.\n");
-            exit(-2);
+            exit(EXIT_UNSUPPORTED);
         }
 
         ret = smu_init(&obj);
         if (ret != SMU_Return_OK) {
             fprintf(stderr, "%s\n", smu_return_to_str(ret));
-            exit(-2);
+            exit(ret == SMU_Return_RWError ? EXIT_DRIVER : EXIT_UNSUPPORTED);
         }
 
         if (controls_requested()) run_controls(force);
